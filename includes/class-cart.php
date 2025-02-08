@@ -42,7 +42,7 @@ class SSC_Cart {
         $price = intval($_POST['product_price']);
         $action = sanitize_text_field($_POST['cart_action']);
     
-        error_log("Cart action: $action, Name: $name, Price: $price"); // Debugging step
+        error_log("Cart action: $action, Name: $name, Price: $price");
     
         $table_name = $wpdb->prefix . 'ssc_cart';
         $current_quantity = SSC_Cart::get_cart_quantity($user_id, $name);
@@ -64,13 +64,17 @@ class SSC_Cart {
         $cart_total = SSC_Cart::get_cart_total($user_id);
         $cart_html = SSC_Cart::render_cart();
     
-        error_log("AJAX Response - Cart Total: $cart_total, Cart HTML: " . print_r($cart_html, true)); // Debugging step
+        // Debug log
+        error_log("Cart Total: " . print_r($cart_total, true));
+        error_log("Cart HTML: " . print_r($cart_html, true));
     
+        // Fix JSON encoding issue
         wp_send_json_success([
             'cart_total' => SSC_Helpers::format_price($cart_total),
-            'cart_html' => $cart_html,
+            'cart_html' => trim($cart_html),
         ]);
     }
+    
     
 
     public static function get_cart_quantity($user_id, $name) {
@@ -128,6 +132,13 @@ class SSC_Cart {
         }
         return $_COOKIE['ssc_user_id'];
     }
+    public static function get_cart_items($user_id) {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'ssc_cart';
+    
+        return $wpdb->get_results($wpdb->prepare("SELECT * FROM $table_name WHERE userID = %s", $user_id));
+    }
+    
 }
 
 add_action('wp_ajax_ssc_update_cart', ['SSC_Cart', 'handle_cart_update']);
