@@ -1,12 +1,12 @@
 document.addEventListener("DOMContentLoaded", function () {
-    document.querySelectorAll(".ssc-cart-btn").forEach(function (button) {
-        button.addEventListener("click", function () {
-            let action = this.dataset.action;
-            let productName = this.dataset.name;
-            let productPrice = this.dataset.price;
+    document.body.addEventListener("click", function (event) {
+        if (event.target.classList.contains("ssc-cart-btn")) {
+            let action = event.target.dataset.action;
+            let productName = event.target.dataset.name;
+            let productPrice = event.target.dataset.price;
 
             updateCart(action, productName, productPrice);
-        });
+        }
     });
 
     function updateCart(action, name, price) {
@@ -25,6 +25,8 @@ document.addEventListener("DOMContentLoaded", function () {
             if (data.success) {
                 document.getElementById("ssc-cart-total").innerText = data.cart_total;
                 document.getElementById("ssc-cart-items").innerHTML = data.cart_html;
+            } else {
+                console.error("Error: ", data.message);
             }
         })
         .catch(error => console.error("Error updating cart:", error));
