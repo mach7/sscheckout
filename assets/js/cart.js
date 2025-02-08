@@ -24,13 +24,23 @@ document.addEventListener("DOMContentLoaded", function () {
         })
         .then(response => response.json())
         .then(data => {
-            if (data.success) {
-                document.getElementById("ssc-cart-total").innerText = data.cart_total;
-                document.getElementById("ssc-cart-items").innerHTML = data.cart_html;
+            console.log("AJAX response:", data); // Debugging step
+        
+            let cartTotalElement = document.getElementById("ssc-cart-total");
+            let cartItemsElement = document.getElementById("ssc-cart-items");
+        
+            if (cartTotalElement) {
+                cartTotalElement.innerText = data.cart_total;
             } else {
-                console.error("Error: ", data.message);
+                console.warn("Warning: #ssc-cart-total element not found.");
+            }
+        
+            if (cartItemsElement) {
+                cartItemsElement.innerHTML = data.cart_html;
+            } else {
+                console.warn("Warning: #ssc-cart-items element not found.");
             }
         })
-        .catch(error => console.error("Error updating cart:", error));
+        .catch(error => console.error("Error updating cart:", error));        
     }
 });
