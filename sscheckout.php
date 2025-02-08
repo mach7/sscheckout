@@ -2,7 +2,7 @@
 /*
 Plugin Name: Simple Stripe Checkout
 Description: A lightweight Stripe checkout plugin for adding simple cart functionality with embedded payments.
-Version: 1.0.0
+Version: 1.0.1
 Author: Tyson Brooks
 Author URI: https://frostlineworks.com
 Tested up to: 6.4
