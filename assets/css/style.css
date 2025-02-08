@@ -1,0 +1,64 @@
+/* Simple Stripe Checkout Plugin Styles */
+
+.ssc-cart-container {
+    max-width: 600px;
+    margin: 20px auto;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+}
+
+.ssc-cart-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid #ddd;
+}
+
+.ssc-cart-item:last-child {
+    border-bottom: none;
+}
+
+.ssc-cart-actions {
+    display: flex;
+    align-items: center;
+}
+
+.ssc-cart-btn {
+    background-color: #0073aa;
+    color: #fff;
+    border: none;
+    padding: 5px 10px;
+    margin: 0 5px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.ssc-cart-btn:hover {
+    background-color: #005177;
+}
+
+.ssc-checkout-total {
+    font-weight: bold;
+    text-align: right;
+    margin-top: 10px;
+}
+
+.ssc-checkout-btn {
+    width: 100%;
+    background-color: #28a745;
+    color: #fff;
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.ssc-checkout-btn:hover {
+    background-color: #218838;
+}
