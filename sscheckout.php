@@ -124,6 +124,7 @@ function ssc_enqueue_scripts() {
     
     wp_localize_script('ssc-cart-js', 'ssc_ajax', [
         'ajax_url' => admin_url('admin-ajax.php'),
+        'debug' => is_debug_mode_enabled()
     ]);
 }
 add_action('wp_enqueue_scripts', 'ssc_enqueue_scripts');

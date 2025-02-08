@@ -29,20 +29,25 @@ document.addEventListener("DOMContentLoaded", function () {
             let cartTotalElement = document.getElementById("ssc-cart-total");
             let cartItemsElement = document.getElementById("ssc-cart-items");
         
-            if (cartTotalElement) {
-                console.log("Updating cart total:", data.cart_total);
-                cartTotalElement.innerText = data.cart_total;
-            } else {
-                console.warn("Warning: #ssc-cart-total element not found.");
-            }
-        
             if (cartItemsElement) {
                 console.log("Updating cart items:", data.cart_html);
                 cartItemsElement.innerHTML = data.cart_html;
             } else {
                 console.warn("Warning: #ssc-cart-items element not found.");
             }
+        
+            // After updating the cart, get the new cart total element from updated HTML
+            setTimeout(() => {
+                let updatedCartTotalElement = document.getElementById("ssc-cart-total");
+        
+                if (updatedCartTotalElement) {
+                    console.log("Updating cart total:", data.cart_total);
+                    updatedCartTotalElement.innerText = data.cart_total;
+                } else {
+                    console.warn("Warning: #ssc-cart-total element not found after update.");
+                }
+            }, 100); // Wait a moment to allow DOM update
         })
-        .catch(error => console.error("Fetch error:", error));               
+        .catch(error => console.error("Error updating cart:", error));        
     }
 });
