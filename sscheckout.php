@@ -27,7 +27,6 @@ add_action('plugins_loaded', function () {
         add_filter('site_transient_update_plugins', function ($transient) {
             if (isset($transient->response)) {
                 foreach ($transient->response as $plugin_slug => $plugin_data) {
-                    // Use the plugin's main file path to determine its asset URL
                     if ($plugin_slug === plugin_basename(__FILE__)) {
                         $icon_url = plugins_url('assets/logo-128x128.png', __FILE__);
                         $transient->response[$plugin_slug]->icons = [
@@ -41,7 +40,6 @@ add_action('plugins_loaded', function () {
             return $transient;
         });
     } else {
-        // Admin notice for missing library
         add_action('admin_notices', function () {
             $pluginSlug = 'flwpluginlibrary/flwpluginlibrary.php';
             $plugins = get_plugins();
@@ -61,16 +59,11 @@ add_action('plugins_loaded', function () {
     // Check if the FLW Plugin Library is available
     if (class_exists('FLW_Plugin_Library')) {
         class SSC_Plugin {
-            /**
-             * Constructor to initialize the plugin.
-             */
             public function __construct() {
                 add_action('admin_menu', [$this, 'register_submenu']);
+                $this->include_files();
             }
 
-            /**
-             * Register the submenu under the FLW Plugins menu.
-             */
             public function register_submenu() {
                 FLW_Plugin_Library::add_submenu(
                     'Simple Stripe Checkout', // Title
@@ -79,26 +72,41 @@ add_action('plugins_loaded', function () {
                 );
             }
 
-            /**
-             * Render the settings page content.
-             */
             public function render_settings_page() {
                 echo '<div class="wrap">';
                 echo '<h1>Simple Stripe Checkout</h1>';
                 echo '<form method="post" action="options.php">';
-                // Settings fields and save button would go here
                 echo '<p>Here you can manage settings for Simple Stripe Checkout.</p>';
                 echo '</form>';
                 echo '</div>';
             }
+
+            private function include_files() {
+                require_once plugin_dir_path(__FILE__) . 'includes/class-cart.php';
+                require_once plugin_dir_path(__FILE__) . 'includes/class-checkout.php';
+                require_once plugin_dir_path(__FILE__) . 'includes/class-orders.php';
+                require_once plugin_dir_path(__FILE__) . 'includes/helpers.php';
+                require_once plugin_dir_path(__FILE__) . 'admin/class-admin.php';
+            }
         }
 
-        // Initialize the plugin
         new SSC_Plugin();
     } else {
-        // Show an admin notice if the FLW Plugin Library is not active
         add_action('admin_notices', function () {
             echo '<div class="notice notice-error"><p>The FLW Plugin Library must be activated for Simple Stripe Checkout to work.</p></div>';
         });
     }
 });
+
+// Plugin activation hook
+function ssc_activate() {
+    require_once plugin_dir_path(__FILE__) . 'database/install.php';
+    SSC_Install::run();
+}
+register_activation_hook(__FILE__, 'ssc_activate');
+
+// Plugin deactivation hook
+function ssc_deactivate() {
+    // Cleanup tasks if needed
+}
+register_deactivation_hook(__FILE__, 'ssc_deactivate');
