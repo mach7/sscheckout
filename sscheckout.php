@@ -118,3 +118,12 @@ function ssc_register_shortcodes() {
     add_shortcode('Checkout', ['SSC_Checkout', 'checkout_page']);
 }
 add_action('init', 'ssc_register_shortcodes');
+
+function ssc_enqueue_scripts() {
+    wp_enqueue_script('ssc-cart-js', plugin_dir_url(__FILE__) . 'assets/js/cart.js', ['jquery'], null, true);
+    
+    wp_localize_script('ssc-cart-js', 'ssc_ajax', [
+        'ajax_url' => admin_url('admin-ajax.php'),
+    ]);
+}
+add_action('wp_enqueue_scripts', 'ssc_enqueue_scripts');
