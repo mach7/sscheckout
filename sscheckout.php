@@ -110,3 +110,11 @@ function ssc_deactivate() {
     // Cleanup tasks if needed
 }
 register_deactivation_hook(__FILE__, 'ssc_deactivate');
+
+
+// Register shortcodes
+function ssc_register_shortcodes() {
+    add_shortcode('add_to_cart', ['SSC_Cart', 'add_to_cart_button']);
+    add_shortcode('Checkout', ['SSC_Checkout', 'checkout_page']);
+}
+add_action('init', 'ssc_register_shortcodes');
