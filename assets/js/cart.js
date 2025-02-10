@@ -1,11 +1,8 @@
-document.addEventListener("DOMContentLoaded", function () {
-    console.log("SSC Cart JS Loaded");
+console.log("SSC Cart JS Loaded");
 
-    let cartContainer = document.querySelector(".ssc-cart-container");
-    
-    if (!cartContainer) {
-        console.warn("Warning: .ssc-cart-container not found on page load.");
-    }
+document.addEventListener("DOMContentLoaded", function () {
+    // Load cart on page load
+    loadCart();
 
     document.body.addEventListener("click", function (event) {
         if (event.target.classList.contains("ssc-cart-btn")) {
@@ -18,6 +15,34 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 });
 
+function loadCart() {
+    // Fetch the cart contents from the server on page load
+    let data = new FormData();
+    data.append("action", "ssc_load_cart");
+
+    fetch(ssc_ajax.ajax_url, {
+        method: "POST",
+        body: data,
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log("Cart loaded:", data);
+
+        let cartContainer = document.querySelector(".ssc-cart-container");
+
+        if (cartContainer) {
+            cartContainer.innerHTML = data.cart_html; // Replace cart contents
+        } else {
+            console.warn("Warning: .ssc-cart-container not found. Appending new cart.");
+            
+            let newCart = document.createElement("div");
+            newCart.classList.add("ssc-cart-container");
+            newCart.innerHTML = data.cart_html;
+            document.body.appendChild(newCart); // Append to body or specific container
+        }
+    })
+    .catch(error => console.error("Error loading cart:", error));
+}
 
 function updateCart(action, name, price) {
     let data = new FormData();
@@ -32,43 +57,20 @@ function updateCart(action, name, price) {
     })
     .then(response => response.json())
     .then(data => {
-        console.log("Full AJAX response:", data); // Debugging step
+        console.log("Full AJAX response:", data);
 
         let cartContainer = document.querySelector(".ssc-cart-container");
 
         if (cartContainer) {
-            console.log("Updating full cart container");
-            cartContainer.innerHTML = data.data.cart_html; // Insert updated cart HTML
+            cartContainer.innerHTML = data.cart_html; // Replace existing cart
         } else {
-            console.warn("Warning: .ssc-cart-container element not found. Appending new cart.");
+            console.warn("Warning: .ssc-cart-container not found. Appending new cart.");
             
             let newCart = document.createElement("div");
             newCart.classList.add("ssc-cart-container");
-            newCart.innerHTML = data.data.cart_html;
-            document.body.appendChild(newCart); // Append to body or correct section
+            newCart.innerHTML = data.cart_html;
+            document.body.appendChild(newCart);
         }
-
-        // After updating the cart, update the button to show "- X +"
-        updateCartButtons();
     })
     .catch(error => console.error("Error updating cart:", error));
-}
-
-function updateCartButtons() {
-    document.querySelectorAll(".ssc-cart-btn").forEach(button => {
-        let quantityElement = button.parentNode.querySelector(".ssc-cart-quantity");
-        let quantity = parseInt(quantityElement?.innerText || 0);
-
-        if (quantity > 0) {
-            let productName = button.dataset.name;
-            let productPrice = button.dataset.price;
-            
-            let newButtons = `
-                <button class="ssc-cart-btn" data-action="decrease" data-name="${productName}" data-price="${productPrice}">-</button>
-                <span class="ssc-cart-quantity">${quantity}</span>
-                <button class="ssc-cart-btn" data-action="increase" data-name="${productName}" data-price="${productPrice}">+</button>
-            `;
-            button.parentNode.innerHTML = newButtons;
-        }
-    });
 }
