@@ -1,6 +1,12 @@
-console.log("SSC Cart JS Loaded");
-
 document.addEventListener("DOMContentLoaded", function () {
+    console.log("SSC Cart JS Loaded");
+
+    let cartContainer = document.querySelector(".ssc-cart-container");
+    
+    if (!cartContainer) {
+        console.warn("Warning: .ssc-cart-container not found on page load.");
+    }
+
     document.body.addEventListener("click", function (event) {
         if (event.target.classList.contains("ssc-cart-btn")) {
             let action = event.target.dataset.action;
@@ -11,6 +17,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     });
 });
+
 
 function updateCart(action, name, price) {
     let data = new FormData();
