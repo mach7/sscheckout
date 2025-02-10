@@ -25,7 +25,9 @@ $cart_total = SSC_Cart::get_cart_total($user_id);
                 <?php endforeach; ?>
             </ul>
         <?php else : ?>
-            <p>Your cart is empty.</p>
+            <ul id="ssc-cart-placeholder">
+                <li class="ssc-cart-item">Your cart is empty.</li>
+            </ul>
         <?php endif; ?>
     </div>
     <p class="ssc-checkout-total">Total: <span id="ssc-cart-total"><?php echo SSC_Helpers::format_price($cart_total); ?></span></p>
