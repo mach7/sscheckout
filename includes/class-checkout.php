@@ -6,21 +6,23 @@ if (!defined('ABSPATH')) {
 class SSC_Checkout {
     public static function checkout_page() {
         ob_start();
-        $user_id = SSC_Cart::get_user_id();
+        error_log("SSC Checkout page loaded."); // Debugging log
+
+        $user_id = method_exists('SSC_Cart', 'get_current_user') ? SSC_Cart::get_current_user() : 0;
         $cart_total = SSC_Cart::get_cart_total($user_id);
-        
+
         echo '<div class="ssc-checkout-container">';
         echo '<h2>Checkout</h2>';
         echo '<div id="ssc-cart-items">' . SSC_Cart::render_cart() . '</div>';
         echo '<p class="ssc-checkout-total">Total: $<span id="ssc-cart-total">' . number_format($cart_total / 100, 2) . '</span></p>';
-        
+
         echo '<form id="ssc-checkout-form" method="post">';
         echo '<div id="ssc-payment-element"></div>';
         echo '<button type="submit" class="ssc-checkout-btn">Pay Now</button>';
         echo '</form>';
         echo '<p id="ssc-checkout-message"></p>';
         echo '</div>';
-        
+
         return ob_get_clean();
     }
 
@@ -29,7 +31,7 @@ class SSC_Checkout {
             wp_send_json_error(['message' => 'Invalid request.']);
         }
 
-        $user_id = SSC_Cart::get_user_id();
+        $user_id = method_exists('SSC_Cart', 'get_current_user') ? SSC_Cart::get_current_user() : 0;
         $cart_total = SSC_Cart::get_cart_total($user_id);
 
         if ($cart_total <= 0) {
@@ -37,7 +39,7 @@ class SSC_Checkout {
         }
 
         \Stripe\Stripe::setApiKey(get_option('flw_stripe_secret_key'));
-        
+
         try {
             $payment_intent = \Stripe\PaymentIntent::create([
                 'amount' => $cart_total,
@@ -47,7 +49,7 @@ class SSC_Checkout {
 
             SSC_Checkout::store_order($user_id, $cart_total);
             SSC_Cart::clear_cart($user_id);
-            
+
             wp_send_json_success(['message' => 'Payment successful!']);
         } catch (Exception $e) {
             wp_send_json_error(['message' => 'Payment failed: ' . $e->getMessage()]);
@@ -57,7 +59,7 @@ class SSC_Checkout {
     private static function store_order($user_id, $cart_total) {
         global $wpdb;
         $table_name = $wpdb->prefix . 'ssc_orders';
-        
+
         $wpdb->insert($table_name, [
             'userID' => $user_id,
             'cart_total' => $cart_total,

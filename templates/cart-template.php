@@ -6,7 +6,11 @@ if (!defined('ABSPATH')) {
 $user_id = SSC_Helpers::get_user_id();
 $cart_items = SSC_Cart::get_cart_items($user_id);
 $cart_total = SSC_Cart::get_cart_total($user_id);
+
+error_log("Cart template loaded.");
 ?>
+<p>Debug: Cart template is loading.</p>
+
 
 <div class="ssc-cart-container">
     <h2>Your Cart</h2>
