@@ -145,7 +145,7 @@ class SSC_Cart {
         return $wpdb->get_results($wpdb->prepare("SELECT * FROM $table_name WHERE userID = %s", $user_id));
     }
     public static function load_cart() {
-        $user_id = self::get_current_user(); // Ensure we fetch the correct user
+        $user_id = self::get_user_id(); // Corrected method name
         $cart_html = self::get_cart_items_html($user_id);
         $cart_total = self::get_cart_total($user_id);
     
@@ -154,6 +154,7 @@ class SSC_Cart {
             'cart_total' => number_format($cart_total / 100, 2),
         ]);
     }
+    
     
     
 }
