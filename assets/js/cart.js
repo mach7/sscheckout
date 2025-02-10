@@ -37,7 +37,5 @@ document.addEventListener("DOMContentLoaded", function () {
         })
         .catch(error => console.error("Error updating cart:", error));
         
-        })
-        .catch(error => console.error("Error updating cart:", error));
     }
 });
