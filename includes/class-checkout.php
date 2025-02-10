@@ -13,7 +13,7 @@ class SSC_Checkout {
 
         echo '<div class="ssc-checkout-container">';
         echo '<h2>Checkout</h2>';
-        echo '<div id="ssc-cart-items">' . SSC_Cart::render_cart() . '</div>';
+        echo '<div id="ssc-cart-items">' . SSC_Cart::get_cart_items_html($user_id) . '</div>';
         echo '<p class="ssc-checkout-total">Total: $<span id="ssc-cart-total">' . number_format($cart_total / 100, 2) . '</span></p>';
 
         echo '<form id="ssc-checkout-form" method="post">';

@@ -74,6 +74,11 @@ class SSC_Cart {
             ]
         ]);
     }
+    public static function get_cart_items_html($user_id) {
+        ob_start();
+        include plugin_dir_path(__FILE__) . '../templates/cart-template.php';
+        return ob_get_clean();
+    }
     
     
     
