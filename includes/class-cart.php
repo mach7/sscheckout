@@ -144,8 +144,22 @@ class SSC_Cart {
     
         return $wpdb->get_results($wpdb->prepare("SELECT * FROM $table_name WHERE userID = %s", $user_id));
     }
+    public static function load_cart() {
+        $user_id = self::get_current_user(); // Ensure we fetch the correct user
+        $cart_html = self::get_cart_items_html($user_id);
+        $cart_total = self::get_cart_total($user_id);
+    
+        wp_send_json_success([
+            'cart_html' => $cart_html,
+            'cart_total' => number_format($cart_total / 100, 2),
+        ]);
+    }
+    
     
 }
 
 add_action('wp_ajax_ssc_update_cart', ['SSC_Cart', 'handle_cart_update']);
 add_action('wp_ajax_nopriv_ssc_update_cart', ['SSC_Cart', 'handle_cart_update']);
+
+add_action('wp_ajax_ssc_load_cart', ['SSC_Cart', 'load_cart']);
+add_action('wp_ajax_nopriv_ssc_load_cart', ['SSC_Cart', 'load_cart']);

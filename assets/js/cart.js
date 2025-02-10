@@ -16,9 +16,10 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 function loadCart() {
-    // Fetch the cart contents from the server on page load
     let data = new FormData();
     data.append("action", "ssc_load_cart");
+
+    console.log("Sending AJAX request to load cart:", data);
 
     fetch(ssc_ajax.ajax_url, {
         method: "POST",
@@ -28,21 +29,18 @@ function loadCart() {
     .then(data => {
         console.log("Cart loaded:", data);
 
-        let cartContainer = document.querySelector(".ssc-cart-container");
-
-        if (cartContainer) {
-            cartContainer.innerHTML = data.cart_html; // Replace cart contents
+        if (data.success) {
+            let cartContainer = document.querySelector(".ssc-cart-container");
+            if (cartContainer) {
+                cartContainer.innerHTML = data.cart_html;
+            }
         } else {
-            console.warn("Warning: .ssc-cart-container not found. Appending new cart.");
-            
-            let newCart = document.createElement("div");
-            newCart.classList.add("ssc-cart-container");
-            newCart.innerHTML = data.cart_html;
-            document.body.appendChild(newCart); // Append to body or specific container
+            console.error("Failed to load cart:", data);
         }
     })
     .catch(error => console.error("Error loading cart:", error));
 }
+
 
 function updateCart(action, name, price) {
     let data = new FormData();
