@@ -42,8 +42,6 @@ class SSC_Cart {
         $price = intval($_POST['product_price']);
         $action = sanitize_text_field($_POST['cart_action']);
     
-        error_log("Cart action: $action, Name: $name, Price: $price");
-    
         $table_name = $wpdb->prefix . 'ssc_cart';
         $current_quantity = SSC_Cart::get_cart_quantity($user_id, $name);
     
@@ -68,12 +66,15 @@ class SSC_Cart {
         error_log("Cart Total: " . print_r($cart_total, true));
         error_log("Cart HTML: " . print_r($cart_html, true));
     
-        // Fix JSON encoding issue
+        // Fix JSON structure
         wp_send_json_success([
-            'cart_total' => SSC_Helpers::format_price($cart_total),
-            'cart_html' => trim($cart_html),
+            'data' => [
+                'cart_total' => SSC_Helpers::format_price($cart_total),
+                'cart_html' => trim($cart_html),
+            ]
         ]);
     }
+    
     
     
 
