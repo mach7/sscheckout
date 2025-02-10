@@ -26,27 +26,17 @@ document.addEventListener("DOMContentLoaded", function () {
         .then(data => {
             console.log("Full AJAX response:", data); // Debugging step
         
-            let cartTotalElement = document.getElementById("ssc-cart-total");
-            let cartItemsElement = document.getElementById("ssc-cart-items");
+            let cartContainer = document.querySelector(".ssc-cart-container");
         
-            if (cartItemsElement) {
-                console.log("Updating cart items:", data.cart_html);
-                cartItemsElement.innerHTML = data.cart_html;
+            if (cartContainer) {
+                console.log("Updating full cart container");
+                cartContainer.outerHTML = data.cart_html;
             } else {
-                console.warn("Warning: #ssc-cart-items element not found.");
+                console.warn("Warning: .ssc-cart-container element not found.");
             }
+        })
+        .catch(error => console.error("Error updating cart:", error));
         
-            // After updating the cart, get the new cart total element from updated HTML
-            setTimeout(() => {
-                let updatedCartTotalElement = document.getElementById("ssc-cart-total");
-        
-                if (updatedCartTotalElement) {
-                    console.log("Updating cart total:", data.cart_total);
-                    updatedCartTotalElement.innerText = data.cart_total;
-                } else {
-                    console.warn("Warning: #ssc-cart-total element not found after update.");
-                }
-            }, 100); // Wait a moment to allow DOM update
         })
         .catch(error => console.error("Error updating cart:", error));
     }
