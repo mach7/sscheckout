@@ -48,6 +48,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 }
             }, 100); // Wait a moment to allow DOM update
         })
-        .catch(error => console.error("Error updating cart:", error));        
+        .catch(error => console.error("Error updating cart:", error));
     }
 });
