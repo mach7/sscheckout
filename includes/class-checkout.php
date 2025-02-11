@@ -1,72 +1,86 @@
 <?php
-if (!defined('ABSPATH')) {
+if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
 class SSC_Checkout {
-    public static function checkout_page() {
+
+    /**
+     * Renders the checkout page (cart + payment form).
+     */
+    public function checkout_page() {
         ob_start();
-        error_log("SSC Checkout page loaded."); // Debugging log
-
-        $user_id = method_exists('SSC_Cart', 'get_current_user') ? SSC_Cart::get_current_user() : 0;
-        $cart_total = SSC_Cart::get_cart_total($user_id);
-
-        echo '<div class="ssc-checkout-container">';
-        echo '<h2>Checkout</h2>';
-        echo '<div id="ssc-cart-items">' . SSC_Cart::get_cart_items_html($user_id) . '</div>';
-        echo '<p class="ssc-checkout-total">Total: $<span id="ssc-cart-total">' . number_format($cart_total / 100, 2) . '</span></p>';
-
-        echo '<form id="ssc-checkout-form" method="post">';
-        echo '<div id="ssc-payment-element"></div>';
-        echo '<button type="submit" class="ssc-checkout-btn">Pay Now</button>';
-        echo '</form>';
-        echo '<p id="ssc-checkout-message"></p>';
-        echo '</div>';
-
+        include SSCHECKOUT_PLUGIN_DIR . 'templates/checkout-template.php';
         return ob_get_clean();
     }
-
-    public static function process_payment() {
-        if (!isset($_POST['action']) || $_POST['action'] !== 'ssc_process_payment') {
-            wp_send_json_error(['message' => 'Invalid request.']);
+    
+    /**
+     * Processes the payment using Stripe.
+     * Expects an AJAX call and returns a PaymentIntent client secret.
+     */
+    public function process_payment() {
+        if ( ! is_ssl() ) {
+            wp_send_json_error( 'SSL is required for Stripe payments.' );
         }
-
-        $user_id = method_exists('SSC_Cart', 'get_current_user') ? SSC_Cart::get_current_user() : 0;
-        $cart_total = SSC_Cart::get_cart_total($user_id);
-
-        if ($cart_total <= 0) {
-            wp_send_json_error(['message' => 'Cart is empty.']);
+        
+        // Retrieve stored Stripe API keys (set in admin settings)
+        $stripe_public_key = get_option( 'flw_stripe_public_key' );
+        $stripe_secret_key = get_option( 'flw_stripe_secret_key' );
+        
+        if ( ! $stripe_public_key || ! $stripe_secret_key ) {
+            wp_send_json_error( 'Stripe API keys are not set.' );
         }
-
-        \Stripe\Stripe::setApiKey(get_option('flw_stripe_secret_key'));
-
+        
+        // Ensure the Stripe PHP library is loaded.
+        if ( ! class_exists( 'Stripe\Stripe' ) ) {
+            // Make sure you have installed Stripe via Composer and this path is correct.
+            require_once SSCHECKOUT_PLUGIN_DIR . 'vendor/autoload.php';
+        }
+        
+        \Stripe\Stripe::setApiKey( $stripe_secret_key );
+        
+        // Calculate cart total (assumes USD)
+        $cart   = new SSC_Cart();
+        $items  = $cart->get_cart_items();
+        $amount = 0;
+        foreach ( $items as $item ) {
+            $amount += $item->price * $item->quantity;
+        }
+        
         try {
-            $payment_intent = \Stripe\PaymentIntent::create([
-                'amount' => $cart_total,
+            $paymentIntent = \Stripe\PaymentIntent::create( [
+                'amount'   => $amount * 100, // Amount in cents
                 'currency' => 'usd',
-                'payment_method_types' => ['card'],
-            ]);
-
-            SSC_Checkout::store_order($user_id, $cart_total);
-            SSC_Cart::clear_cart($user_id);
-
-            wp_send_json_success(['message' => 'Payment successful!']);
-        } catch (Exception $e) {
-            wp_send_json_error(['message' => 'Payment failed: ' . $e->getMessage()]);
+            ] );
+            
+            wp_send_json_success( [
+                'client_secret' => $paymentIntent->client_secret,
+            ] );
+        } catch ( Exception $e ) {
+            wp_send_json_error( $e->getMessage() );
         }
     }
-
-    private static function store_order($user_id, $cart_total) {
+    
+    /**
+     * Stores an order in the database after successful payment.
+     */
+    public function store_order( $user_id, $cart_total ) {
         global $wpdb;
-        $table_name = $wpdb->prefix . 'ssc_orders';
-
-        $wpdb->insert($table_name, [
-            'userID' => $user_id,
-            'cart_total' => $cart_total,
-            'date' => current_time('mysql')
-        ]);
+        $table_orders = $wpdb->prefix . 'sscheckout_orders';
+        $wpdb->insert( $table_orders, array(
+            'user_id'       => $user_id,
+            'cart_total'    => $cart_total,
+            'purchase_date' => current_time( 'mysql' )
+        ) );
     }
 }
 
-add_action('wp_ajax_ssc_process_payment', ['SSC_Checkout', 'process_payment']);
-add_action('wp_ajax_nopriv_ssc_process_payment', ['SSC_Checkout', 'process_payment']);
+// AJAX handler for processing payment
+add_action( 'wp_ajax_ssc_process_payment', function() {
+    $checkout = new SSC_Checkout();
+    $checkout->process_payment();
+});
+add_action( 'wp_ajax_nopriv_ssc_process_payment', function() {
+    $checkout = new SSC_Checkout();
+    $checkout->process_payment();
+});

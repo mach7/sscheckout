@@ -1,74 +1,53 @@
-console.log("SSC Cart JS Loaded");
-
-document.addEventListener("DOMContentLoaded", function () {
-    // Load cart on page load
-    loadCart();
-
-    document.body.addEventListener("click", function (event) {
-        if (event.target.classList.contains("ssc-cart-btn")) {
-            let action = event.target.dataset.action;
-            let productName = event.target.dataset.name;
-            let productPrice = event.target.dataset.price;
-
-            updateCart(action, productName, productPrice);
-        }
+jQuery(document).ready(function($) {
+    // Handle Add to Cart button click
+    $(document).on('click', '.ssc-add-to-cart', function(e) {
+        e.preventDefault();
+        var button = $(this);
+        var productName = button.data('name');
+        var price = button.data('price');
+        updateCart('add', productName, price);
     });
-});
 
-function loadCart() {
-    let data = new FormData();
-    data.append("action", "ssc_load_cart");
+    // Handle Increase quantity
+    $(document).on('click', '.ssc-increase', function(e) {
+        e.preventDefault();
+        var button = $(this);
+        var productName = button.data('name');
+        var price = button.data('price');
+        updateCart('add', productName, price);
+    });
 
-    console.log("Sending AJAX request to load cart:", data);
+    // Handle Decrease quantity
+    $(document).on('click', '.ssc-decrease', function(e) {
+        e.preventDefault();
+        var button = $(this);
+        var productName = button.data('name');
+        var price = button.data('price') || 0;
+        updateCart('remove', productName, price);
+    });
 
-    fetch(ssc_ajax.ajax_url, {
-        method: "POST",
-        body: data,
-    })
-    .then(response => response.json())
-    .then(data => {
-        console.log("Cart loaded:", data);
+    // Function to update cart via AJAX
+    function updateCart(operation, name, price) {
+        var data = {
+            action: 'ssc_update_cart',
+            operation: operation,
+            name: name,
+            price: price
+        };
 
-        if (data.success) {
-            let cartContainer = document.querySelector(".ssc-cart-container");
-            if (cartContainer) {
-                cartContainer.innerHTML = data.cart_html;
+        $.post(ssc_ajax.ajax_url, data, function(response) {
+            if (response.success) {
+                refreshCart();
+            } else {
+                console.log(response.data);
             }
-        } else {
-            console.error("Failed to load cart:", data);
-        }
-    })
-    .catch(error => console.error("Error loading cart:", error));
-}
+        });
+    }
 
-
-function updateCart(action, name, price) {
-    let data = new FormData();
-    data.append("action", "ssc_update_cart");
-    data.append("cart_action", action);
-    data.append("product_name", name);
-    data.append("product_price", price);
-
-    fetch(ssc_ajax.ajax_url, {
-        method: "POST",
-        body: data,
-    })
-    .then(response => response.json())
-    .then(data => {
-        console.log("Full AJAX response:", data);
-
-        let cartContainer = document.querySelector(".ssc-cart-container");
-
-        if (cartContainer) {
-            cartContainer.innerHTML = data.cart_html; // Replace existing cart
-        } else {
-            console.warn("Warning: .ssc-cart-container not found. Appending new cart.");
-            
-            let newCart = document.createElement("div");
-            newCart.classList.add("ssc-cart-container");
-            newCart.innerHTML = data.cart_html;
-            document.body.appendChild(newCart);
-        }
-    })
-    .catch(error => console.error("Error updating cart:", error));
-}
+    // Refresh the cart display
+    function refreshCart() {
+        $.post(ssc_ajax.ajax_url, { action: 'ssc_load_cart' }, function(response) {
+            $('.sscheckout-cart').html(response);
+        });
+    }
+});

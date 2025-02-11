@@ -1,38 +1,33 @@
 <?php
-if (!defined('ABSPATH')) {
+if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-$orders = SSC_Orders::get_orders();
+$orders_obj = new SSC_Orders();
+$orders = $orders_obj->get_orders();
 ?>
-
-<div class="wrap">
-    <h1>Order History</h1>
-    
-    <?php if (empty($orders)) : ?>
-        <p>No orders found.</p>
-    <?php else : ?>
-        <table class="ssc-admin-table">
-            <thead>
+<h2>Order History</h2>
+<table class="wp-list-table widefat fixed striped">
+    <thead>
+        <tr>
+            <th>Customer ID</th>
+            <th>Cart Total</th>
+            <th>Date of Purchase</th>
+        </tr>
+    </thead>
+    <tbody>
+        <?php if ( $orders ) : ?>
+            <?php foreach ( $orders as $order ) : ?>
                 <tr>
-                    <th>Customer Name</th>
-                    <th>Date</th>
-                    <th>Cart Total</th>
-                    <th>Actions</th>
+                    <td><?php echo esc_html( $order->user_id ); ?></td>
+                    <td><?php echo esc_html( $order->cart_total ); ?></td>
+                    <td><?php echo esc_html( $order->purchase_date ); ?></td>
                 </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($orders as $order) : ?>
-                    <tr id="ssc-order-<?php echo esc_attr($order->id); ?>">
-                        <td><?php echo esc_html($order->userID); ?></td>
-                        <td><?php echo esc_html($order->date); ?></td>
-                        <td>$<?php echo number_format($order->cart_total / 100, 2); ?></td>
-                        <td>
-                            <button class="ssc-admin-delete-order" data-order-id="<?php echo esc_attr($order->id); ?>">Delete</button>
-                        </td>
-                    </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
-    <?php endif; ?>
-</div>
+            <?php endforeach; ?>
+        <?php else : ?>
+            <tr>
+                <td colspan="3">No orders found.</td>
+            </tr>
+        <?php endif; ?>
+    </tbody>
+</table>

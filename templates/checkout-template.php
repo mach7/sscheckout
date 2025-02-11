@@ -1,26 +1,21 @@
 <?php
-if (!defined('ABSPATH')) {
+if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
-
-$user_id = SSC_Helpers::get_user_id();
-$cart_total = SSC_Cart::get_cart_total($user_id);
 ?>
-
-<div class="ssc-checkout-container">
-    <h2>Checkout</h2>
-    <div id="ssc-cart-items">
-        <?php echo SSC_Cart::render_cart(); ?>
+<div class="sscheckout-checkout-container">
+    <div class="sscheckout-cart">
+        <?php
+        // Display the current cart
+        $cart = new SSC_Cart();
+        echo $cart->get_cart_items_html();
+        ?>
     </div>
-    <p class="ssc-checkout-total">Total: <span id="ssc-cart-total"> <?php echo SSC_Helpers::format_price($cart_total); ?> </span></p>
-    
-    <?php if ($cart_total > 0) : ?>
-        <form id="ssc-checkout-form" method="post">
-            <div id="ssc-payment-element"></div>
-            <button type="submit" class="ssc-checkout-btn">Pay Now</button>
+    <div class="sscheckout-payment">
+        <form id="ssc-payment-form">
+            <div id="card-element"><!-- Stripe Element will be inserted here --></div>
+            <button id="ssc-submit-payment" type="button">Pay Now</button>
         </form>
-        <p id="ssc-checkout-message"></p>
-    <?php else : ?>
-        <p>Your cart is empty.</p>
-    <?php endif; ?>
+        <div id="ssc-payment-message"></div>
+    </div>
 </div>
