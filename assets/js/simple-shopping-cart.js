@@ -1,6 +1,6 @@
 jQuery(document).ready(function ($) {
-    // Initialize Stripe using the publishable key passed from PHP.
-    var stripe = Stripe(ssc_ajax.publishableKey);
+    // Initialize Stripe with your publishable key from sscheckout_params.
+    var stripe = Stripe(sscheckout_params.publishableKey);
     var elements = stripe.elements();
 
     // Custom styling for the Stripe Element.
@@ -20,21 +20,25 @@ jQuery(document).ready(function ($) {
         }
     };
 
-    // Create the card Element and mount it.
+    // Create and mount the card Element.
     var card = elements.create("card", { style: style });
     card.mount("#card-element");
 
-    // Handle real-time validation errors.
+    // Handle real-time validation errors from the card Element.
     card.on("change", function (event) {
         var displayError = document.getElementById("card-errors");
-        displayError.textContent = event.error ? event.error.message : "";
+        if (event.error) {
+            displayError.textContent = event.error.message;
+        } else {
+            displayError.textContent = "";
+        }
     });
 
-    // Handle checkout form submission.
-    $("#ssc-checkout-form").submit(function (e) {
+    // Handle form submission.
+    $("#ss-checkout-form").submit(function (e) {
         e.preventDefault();
-        var $form = $(this);
-        $form.find('button[type="submit"]').prop("disabled", true);
+        // Disable the submit button to prevent repeated clicks.
+        $(this).find('button[type="submit"]').prop("disabled", true);
 
         stripe.createPaymentMethod({
             type: "card",
@@ -47,22 +51,24 @@ jQuery(document).ready(function ($) {
         }).then(function (result) {
             if (result.error) {
                 $("#card-errors").text(result.error.message);
-                $form.find('button[type="submit"]').prop("disabled", false);
+                $("#ss-checkout-form").find('button[type="submit"]').prop("disabled", false);
             } else {
+                // Send the PaymentMethod ID to your server.
+                var paymentMethod = result.paymentMethod.id;
                 var formData = {
                     action: "ssc_checkout",
                     name: $("input[name='name']").val(),
                     email: $("input[name='email']").val(),
                     password: $("input[name='password']").val(),
                     phone: $("input[name='phone']").val(),
-                    paymentMethod: result.paymentMethod.id
+                    paymentMethod: paymentMethod
                 };
-                $.post(ssc_ajax.ajax_url, formData, function (response) {
+                $.post(sscheckout_params.ajax_url, formData, function (response) {
                     if (response.success) {
                         $("#ssc-checkout-response").html("<p>" + response.data + "</p>");
                     } else {
                         $("#ssc-checkout-response").html("<p>Error: " + response.data + "</p>");
-                        $form.find('button[type="submit"]').prop("disabled", false);
+                        $("#ss-checkout-form").find('button[type="submit"]').prop("disabled", false);
                     }
                 });
             }

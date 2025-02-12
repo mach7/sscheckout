@@ -1,17 +1,17 @@
-.ssc-checkout {
+.ss-checkout {
     max-width: 600px;
     margin: 20px auto;
     padding: 0 15px;
 }
 
-.ssc-cart-table {
+.ss-cart-table {
     width: 100%;
     border-collapse: collapse;
     margin-bottom: 20px;
 }
 
-.ssc-cart-table th,
-.ssc-cart-table td {
+.ss-cart-table th,
+.ss-cart-table td {
     border: 1px solid #ddd;
     padding: 8px;
     text-align: left;
@@ -29,10 +29,10 @@
     margin-bottom: 10px;
 }
 
-.ssc-product {
+.ss-product {
     margin-bottom: 10px;
 }
 
-.ssc-product button {
+.ss-product button {
     margin-right: 5px;
 }
