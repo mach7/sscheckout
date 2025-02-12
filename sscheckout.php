@@ -449,14 +449,17 @@ add_action('plugins_loaded', function () {
 				// --- Create and confirm a PaymentIntent via Stripe API using the PaymentMethod ---
                 $ch = curl_init( 'https://api.stripe.com/v1/payment_intents' );
 
-                // Prepare the data for the PaymentIntent. 
-                // Note: We're using the Payment Methods API, so we pass 'payment_method' instead of 'source'
+                // Set a return URL (for example, your checkout page) so that if the payment method requires a redirect,
+                // Stripe knows where to send the customer after authentication.
+                $return_url = site_url( '/checkout' );
+
                 $intent_data = http_build_query( [
                     'amount'              => $amount,
                     'currency'            => 'usd',
                     'payment_method'      => $paymentMethod,
-                    'confirmation_method' => 'automatic', // let Stripe automatically handle confirmation
+                    'confirmation_method' => 'automatic',
                     'confirm'             => 'true',
+                    'return_url'          => $return_url, // Added return_url parameter
                     'description'         => 'Charge for ' . $name,
                     'metadata[order_id]'  => $order_id,
                 ] );
@@ -472,6 +475,7 @@ add_action('plugins_loaded', function () {
                 if ( isset( $intent_result['error'] ) ) {
                     wp_send_json_error( 'Stripe PaymentIntent error: ' . $intent_result['error']['message'] );
                 }
+
 
 
 				// Create a new WP user if not logged in.
