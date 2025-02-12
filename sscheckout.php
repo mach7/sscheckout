@@ -727,72 +727,96 @@ add_action('plugins_loaded', function () {
 			 * Renders the plugin settings page.
 			 */
 			public function render_settings_page() {
-                // Handle saving settings.
+                // Process form submission.
                 if ( isset( $_POST['ssc_save_settings'] ) ) {
+                    // Save the admin email.
                     update_option( 'ssc_order_admin_email', sanitize_email( wp_unslash( $_POST['order_admin_email'] ) ) );
-                    update_option( 'ssc_global_orders_disabled', isset( $_POST['global_orders_disabled'] ) ? 1 : 0 );
-                    // Assume closed_days is an array of day numbers (1=Mon … 7=Sun).
-                    update_option( 'ssc_closed_days', array_map( 'sanitize_text_field', (array) $_POST['closed_days'] ) );
-                    update_option( 'ssc_after_hours_start', sanitize_text_field( wp_unslash( $_POST['after_hours_start'] ) ) );
-                    update_option( 'ssc_after_hours_end', sanitize_text_field( wp_unslash( $_POST['after_hours_end'] ) ) );
-                    // Pickup types is a serialized array of pickup type configurations.
-                    update_option( 'ssc_pickup_types', maybe_serialize( $_POST['pickup_types'] ) );
+                    
+                    // Process store hours input.
+                    if ( isset( $_POST['store_hours'] ) && is_array( $_POST['store_hours'] ) ) {
+                        $store_hours = [];
+                        foreach ( $_POST['store_hours'] as $day => $data ) {
+                            $store_hours[ $day ] = [
+                                'open'   => sanitize_text_field( $data['open'] ),
+                                'close'  => sanitize_text_field( $data['close'] ),
+                                'closed' => isset( $data['closed'] ) ? 1 : 0,
+                            ];
+                        }
+                        update_option( 'ssc_store_hours', $store_hours );
+                    }
                     echo '<div class="updated"><p>Settings saved.</p></div>';
                 }
-            
+                
                 // Retrieve saved settings.
-                $order_admin_email    = get_option( 'ssc_order_admin_email', get_option( 'admin_email' ) );
-                $global_orders_status = get_option( 'ssc_global_orders_disabled', 0 );
-                $closed_days          = get_option( 'ssc_closed_days', [] );
-                $after_hours_start    = get_option( 'ssc_after_hours_start', '18:00' );
-                $after_hours_end      = get_option( 'ssc_after_hours_end', '08:00' );
-                $pickup_types         = maybe_unserialize( get_option( 'ssc_pickup_types', [] ) );
+                $order_admin_email = get_option( 'ssc_order_admin_email', get_option( 'admin_email' ) );
+                $store_hours       = maybe_unserialize( get_option( 'ssc_store_hours', [] ) );
+                
+                // Define days of the week.
+                $days = [
+                    'sunday'    => 'Sunday',
+                    'monday'    => 'Monday',
+                    'tuesday'   => 'Tuesday',
+                    'wednesday' => 'Wednesday',
+                    'thursday'  => 'Thursday',
+                    'friday'    => 'Friday',
+                    'saturday'  => 'Saturday',
+                ];
                 ?>
                 <div class="wrap">
                     <h1>Shopping Cart Settings</h1>
                     <form method="post" action="">
-                        <label>
-                            Admin Order Email: 
-                            <input type="email" name="order_admin_email" value="<?php echo esc_attr( $order_admin_email ); ?>" required>
-                        </label>
+                        <table class="form-table">
+                            <tr>
+                                <th scope="row">
+                                    <label for="order_admin_email">Admin Order Email:</label>
+                                </th>
+                                <td>
+                                    <input type="email" id="order_admin_email" name="order_admin_email" value="<?php echo esc_attr( $order_admin_email ); ?>" required>
+                                </td>
+                            </tr>
+                        </table>
                         <hr>
-                        <h2>Global Order Controls</h2>
-                        <label>
-                            <input type="checkbox" name="global_orders_disabled" <?php checked( $global_orders_status, 1 ); ?>>
-                            Disable Online Orders
-                        </label>
-                        <br>
-                        <label>
-                            Closed Days (Enter day numbers separated by commas, e.g., 6,7 for Saturday and Sunday):
-                            <input type="text" name="closed_days" value="<?php echo esc_attr( implode( ',', (array)$closed_days ) ); ?>">
-                        </label>
-                        <br>
-                        <label>
-                            After-hours Start (HH:MM, 24-hour format): 
-                            <input type="text" name="after_hours_start" value="<?php echo esc_attr( $after_hours_start ); ?>">
-                        </label>
-                        <br>
-                        <label>
-                            After-hours End (HH:MM, 24-hour format): 
-                            <input type="text" name="after_hours_end" value="<?php echo esc_attr( $after_hours_end ); ?>">
-                        </label>
-                        <hr>
-                        <h2>Pickup Types Management</h2>
-                        <p>You can define multiple pickup types. Use the following format:</p>
-                        <textarea name="pickup_types" rows="5" cols="50" placeholder='e.g., [{"name": "Bakery Orders", "min_lead_time": 24, "time_blocks": {"1": ["09:00-12:00"], "2": ["09:00-12:00"], ...}}]'><?php echo esc_textarea( json_encode( $pickup_types ) ); ?></textarea>
-                        <p><small>Note: min_lead_time is in hours; time_blocks should be a JSON object where keys are day numbers (1=Mon, …, 7=Sun) and values are arrays of allowed time ranges.</small></p>
+                        <h2>Store Hours</h2>
+                        <p>Set the open and close times for each day of the week. Check the box to mark a day as closed.</p>
+                        <table class="widefat">
+                            <thead>
+                                <tr>
+                                    <th>Day</th>
+                                    <th>Open Time</th>
+                                    <th>Close Time</th>
+                                    <th>Closed</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ( $days as $day_key => $day_name ) : 
+                                    $open_time  = isset( $store_hours[ $day_key ]['open'] ) ? $store_hours[ $day_key ]['open'] : '';
+                                    $close_time = isset( $store_hours[ $day_key ]['close'] ) ? $store_hours[ $day_key ]['close'] : '';
+                                    $closed     = isset( $store_hours[ $day_key ]['closed'] ) ? $store_hours[ $day_key ]['closed'] : 0;
+                                ?>
+                                <tr>
+                                    <td><?php echo esc_html( $day_name ); ?></td>
+                                    <td>
+                                        <input type="text" name="store_hours[<?php echo esc_attr( $day_key ); ?>][open]" value="<?php echo esc_attr( $open_time ); ?>" placeholder="08:00">
+                                    </td>
+                                    <td>
+                                        <input type="text" name="store_hours[<?php echo esc_attr( $day_key ); ?>][close]" value="<?php echo esc_attr( $close_time ); ?>" placeholder="17:00">
+                                    </td>
+                                    <td>
+                                        <label>
+                                            <input type="checkbox" name="store_hours[<?php echo esc_attr( $day_key ); ?>][closed]" value="1" <?php checked( $closed, 1 ); ?>>
+                                            Closed
+                                        </label>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
                         <?php submit_button( 'Save Settings', 'primary', 'ssc_save_settings' ); ?>
-                    </form>
-                    <hr>
-                    <h2>Upgrade Database Structure</h2>
-                    <!-- Existing database upgrade form -->
-                    <form method="post" action="">
-                        <?php wp_nonce_field( 'upgrade_db_action', 'upgrade_db_nonce' ); ?>
-                        <?php submit_button( 'Upgrade Database Structure', 'secondary', 'upgrade_db' ); ?>
                     </form>
                 </div>
                 <?php
             }
+            
             
 		}
 
