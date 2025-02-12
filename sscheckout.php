@@ -1,84 +1,133 @@
 <?php
 /*
 Plugin Name: Simple Stripe Checkout
-Plugin URI: http://example.com/
 Description: A lightweight Stripe checkout plugin for adding simple cart functionality with embedded payments.
 Version: 1.0.1
 Author: Tyson Brooks
-Tested up to: WordPress 6.4
+Author URI: https://frostlineworks.com
+Tested up to: 6.4
 */
 
-if ( ! defined( 'ABSPATH' ) ) {
+// Prevent direct access to this file
+if (!defined('ABSPATH')) {
     exit;
 }
 
-// Define constants for paths and URLs
-define( 'SSCHECKOUT_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
-define( 'SSCHECKOUT_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+// Ensure the FLW Plugin Library is loaded before running the plugin
+add_action('plugins_loaded', function () {
 
-// Include required files
-require_once SSCHECKOUT_PLUGIN_DIR . 'includes/helpers.php';
-require_once SSCHECKOUT_PLUGIN_DIR . 'includes/class-cart.php';
-require_once SSCHECKOUT_PLUGIN_DIR . 'includes/class-checkout.php';
-require_once SSCHECKOUT_PLUGIN_DIR . 'includes/class-orders.php';
+    // Check if the FLW Plugin Library is active
+    if (class_exists('FLW_Plugin_Update_Checker')) {
+        $pluginSlug = basename(dirname(__FILE__)); // Dynamically get the plugin slug
 
-// Admin files
-if ( is_admin() ) {
-    require_once SSCHECKOUT_PLUGIN_DIR . 'admin/class-admin.php';
-    require_once SSCHECKOUT_PLUGIN_DIR . 'admin/orders-list.php';
+        // Initialize the update checker
+        FLW_Plugin_Update_Checker::initialize(__FILE__, $pluginSlug);
+
+        // Replace the update icon
+        add_filter('site_transient_update_plugins', function ($transient) {
+            if (isset($transient->response)) {
+                foreach ($transient->response as $plugin_slug => $plugin_data) {
+                    if ($plugin_slug === plugin_basename(__FILE__)) {
+                        $icon_url = plugins_url('assets/logo-128x128.png', __FILE__);
+                        $transient->response[$plugin_slug]->icons = [
+                            'default' => $icon_url,
+                            '1x' => $icon_url,
+                            '2x' => plugins_url('assets/logo-256x256.png', __FILE__),
+                        ];
+                    }
+                }
+            }
+            return $transient;
+        });
+    } else {
+        add_action('admin_notices', function () {
+            $pluginSlug = 'flwpluginlibrary/flwpluginlibrary.php';
+            $plugins = get_plugins();
+
+            if (!isset($plugins[$pluginSlug])) {
+                echo '<div class="notice notice-error"><p>The FLW Plugin Library is not installed. Please install and activate it to enable update functionality.</p></div>';
+            } elseif (!is_plugin_active($pluginSlug)) {
+                $activateUrl = wp_nonce_url(
+                    admin_url('plugins.php?action=activate&plugin=' . $pluginSlug),
+                    'activate-plugin_' . $pluginSlug
+                );
+                echo '<div class="notice notice-error"><p>The FLW Plugin Library is installed but not active. Please <a href="' . esc_url($activateUrl) . '">activate</a> it to enable update functionality.</p></div>';
+            }
+        });
+    }
+
+    // Check if the FLW Plugin Library is available
+    if (class_exists('FLW_Plugin_Library')) {
+        class SSC_Plugin {
+            public function __construct() {
+                add_action('admin_menu', [$this, 'register_submenu']);
+                $this->include_files();
+            }
+
+            public function register_submenu() {
+                FLW_Plugin_Library::add_submenu(
+                    'Simple Stripe Checkout', // Title
+                    'sscheckout', // Slug
+                    [$this, 'render_settings_page'] // Callback function
+                );
+            }
+
+            public function render_settings_page() {
+                echo '<div class="wrap">';
+                echo '<h1>Simple Stripe Checkout</h1>';
+                echo '<form method="post" action="options.php">';
+                echo '<p>Here you can manage settings for Simple Stripe Checkout.</p>';
+                echo '</form>';
+                echo '</div>';
+            }
+
+            private function include_files() {
+                require_once plugin_dir_path(__FILE__) . 'includes/class-cart.php';
+                require_once plugin_dir_path(__FILE__) . 'includes/class-checkout.php';
+                require_once plugin_dir_path(__FILE__) . 'includes/class-orders.php';
+                require_once plugin_dir_path(__FILE__) . 'includes/helpers.php';
+                require_once plugin_dir_path(__FILE__) . 'admin/class-admin.php';
+            }
+        }
+
+        new SSC_Plugin();
+    } else {
+        add_action('admin_notices', function () {
+            echo '<div class="notice notice-error"><p>The FLW Plugin Library must be activated for Simple Stripe Checkout to work.</p></div>';
+        });
+    }
+});
+
+// Plugin activation hook
+function ssc_activate() {
+    require_once plugin_dir_path(__FILE__) . 'database/install.php';
+    SSC_Install::run();
 }
+register_activation_hook(__FILE__, 'ssc_activate');
 
-// Activation: Create database tables
-register_activation_hook( __FILE__, 'sscheckout_install' );
-function sscheckout_install() {
-    require_once SSCHECKOUT_PLUGIN_DIR . 'database/install.php';
-    sscheckout_install_db();
+// Plugin deactivation hook
+function ssc_deactivate() {
+    // Cleanup tasks if needed
 }
+register_deactivation_hook(__FILE__, 'ssc_deactivate');
 
-// Uninstall: Cleanup database
-register_uninstall_hook( __FILE__, 'sscheckout_uninstall' );
-function sscheckout_uninstall() {
-    require_once SSCHECKOUT_PLUGIN_DIR . 'uninstall.php';
-    sscheckout_cleanup();
-}
-
-// Enqueue frontend scripts and styles
-add_action( 'wp_enqueue_scripts', 'sscheckout_enqueue_scripts' );
-function sscheckout_enqueue_scripts() {
-    wp_enqueue_style( 'sscheckout-style', SSCHECKOUT_PLUGIN_URL . 'assets/css/style.css' );
-    wp_enqueue_script( 'sscheckout-cart', SSCHECKOUT_PLUGIN_URL . 'assets/js/cart.js', array( 'jquery' ), '1.0.0', true );
-    wp_localize_script( 'sscheckout-cart', 'ssc_ajax', array(
-        'ajax_url' => admin_url( 'admin-ajax.php' )
-    ) );
-
-    wp_enqueue_script( 'sscheckout-checkout', SSCHECKOUT_PLUGIN_URL . 'assets/js/checkout.js', array( 'jquery' ), '1.0.0', true );
-    // Pass the Stripe public key (set via admin settings) to JS
-    wp_localize_script( 'sscheckout-checkout', 'ssc_stripe', array(
-        'public_key' => get_option( 'flw_stripe_public_key' )
-    ) );
-}
-
-// Enqueue admin scripts and styles
-add_action( 'admin_enqueue_scripts', 'sscheckout_enqueue_admin_scripts' );
-function sscheckout_enqueue_admin_scripts() {
-    wp_enqueue_style( 'sscheckout-admin-style', SSCHECKOUT_PLUGIN_URL . 'assets/css/admin.css' );
-    wp_enqueue_script( 'sscheckout-admin', SSCHECKOUT_PLUGIN_URL . 'assets/js/admin.js', array( 'jquery' ), '1.0.0', true );
-}
 
 // Register shortcodes
-function sscheckout_add_to_cart_shortcode( $atts ) {
-    $atts = shortcode_atts( array(
-        'price' => '0',
-        'name'  => 'Product'
-    ), $atts, 'add_to_cart' );
-    
-    $cart = new SSC_Cart();
-    return $cart->add_to_cart_button( $atts['price'], $atts['name'] );
+function ssc_register_shortcodes() {
+    add_shortcode('add_to_cart', ['SSC_Cart', 'add_to_cart_button']);
+    add_shortcode('Checkout', ['SSC_Checkout', 'checkout_page']);
 }
-add_shortcode( 'add_to_cart', 'sscheckout_add_to_cart_shortcode' );
+add_action('init', 'ssc_register_shortcodes');
 
-function sscheckout_checkout_shortcode( $atts ) {
-    $checkout = new SSC_Checkout();
-    return $checkout->checkout_page();
+function ssc_enqueue_scripts() {
+    wp_enqueue_script( 'ssc-cart-js', plugin_dir_url( __FILE__ ) . 'assets/js/cart.js', ['jquery'], null, true );
+    wp_enqueue_script( 'ssc-checkout-js', plugin_dir_url( __FILE__ ) . 'assets/js/checkout.js', ['jquery'], null, true );
+    
+    // Localize the scripts with common data (using the same object for both)
+    wp_localize_script( 'ssc-cart-js', 'ssc_ajax', [
+        'ajax_url'   => admin_url( 'admin-ajax.php' ),
+        'debug'      => is_debug_mode_enabled(),
+        'stripe_key' => get_option( 'flw_stripe_public_key' ),
+    ] );
 }
-add_shortcode( 'Checkout', 'sscheckout_checkout_shortcode' );
+add_action( 'wp_enqueue_scripts', 'ssc_enqueue_scripts' );

@@ -2,20 +2,20 @@
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
+
+$user_id    = SSC_Helpers::get_user_id();
+$cart_total = SSC_Cart::get_cart_total( $user_id );
 ?>
-<div class="sscheckout-checkout-container">
-    <div class="sscheckout-cart">
-        <?php
-        // Display the current cart
-        $cart = new SSC_Cart();
-        echo $cart->get_cart_items_html();
-        ?>
+
+<div class="ssc-checkout-container">
+    <h2>Checkout</h2>
+    <div id="ssc-cart-items">
+        <?php echo SSC_Cart::get_cart_items_html( $user_id ); ?>
     </div>
-    <div class="sscheckout-payment">
-        <form id="ssc-payment-form">
-            <div id="card-element"><!-- Stripe Element will be inserted here --></div>
-            <button id="ssc-submit-payment" type="button">Pay Now</button>
-        </form>
-        <div id="ssc-payment-message"></div>
-    </div>
+    <p class="ssc-checkout-total">Total: <?php echo SSC_Helpers::format_price( $cart_total ); ?></p>
+    <form id="ssc-checkout-form" method="post">
+        <div id="ssc-payment-element"></div>
+        <button type="submit" class="ssc-checkout-btn">Pay Now</button>
+    </form>
+    <p id="ssc-checkout-message"></p>
 </div>

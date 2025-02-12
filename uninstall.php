@@ -1,14 +1,19 @@
 <?php
-if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
+// If uninstall not called from WordPress, exit
+if (!defined('WP_UNINSTALL_PLUGIN')) {
     exit;
 }
 
+// Global database object
 global $wpdb;
 
-// Drop the orders table
-$table_orders = $wpdb->prefix . 'sscheckout_orders';
-$wpdb->query( "DROP TABLE IF EXISTS $table_orders" );
+// Define table names
+$cart_table = $wpdb->prefix . 'ssc_cart';
+$orders_table = $wpdb->prefix . 'ssc_orders';
 
-// Drop the cart table
-$table_cart = $wpdb->prefix . 'sscheckout_cart';
-$wpdb->query( "DROP TABLE IF EXISTS $table_cart" );
+// Remove plugin tables
+$wpdb->query("DROP TABLE IF EXISTS $cart_table");
+$wpdb->query("DROP TABLE IF EXISTS $orders_table");
+
+// Remove plugin settings
+delete_option('ssc_plugin_settings');

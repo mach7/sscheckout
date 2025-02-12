@@ -1,20 +1,33 @@
 <?php
-if ( ! defined( 'ABSPATH' ) ) {
+if (!defined('ABSPATH')) {
     exit;
 }
 
-/**
- * Returns the unique user ID stored in a cookie.
- * Creates a new one if not already set.
- */
-function sscheckout_get_user_id() {
-    if ( isset( $_COOKIE['sscheckout_user'] ) ) {
-        return sanitize_text_field( $_COOKIE['sscheckout_user'] );
-    } else {
-        $user_id = uniqid( 'sscheckout_', true );
-        // Set cookie for 30 days
-        setcookie( 'sscheckout_user', $user_id, time() + ( 3600 * 24 * 30 ), COOKIEPATH, COOKIE_DOMAIN );
-        $_COOKIE['sscheckout_user'] = $user_id;
-        return $user_id;
+class SSC_Helpers {
+    /**
+     * Get the current user ID based on login status or cookie.
+     */
+    public static function get_user_id() {
+        if (is_user_logged_in()) {
+            return get_current_user_id();
+        }
+        if (!isset($_COOKIE['ssc_user_id'])) {
+            setcookie('ssc_user_id', uniqid(), time() + (86400 * 30), '/');
+        }
+        return $_COOKIE['ssc_user_id'];
+    }
+
+    /**
+     * Format price from cents to dollars.
+     */
+    public static function format_price($amount) {
+        return '$' . number_format($amount / 100, 2);
+    }
+
+    /**
+     * Sanitize input data to prevent XSS and SQL injection.
+     */
+    public static function sanitize_input($input) {
+        return sanitize_text_field($input);
     }
 }

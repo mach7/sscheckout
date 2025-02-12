@@ -1,34 +1,47 @@
-jQuery(document).ready(function($) {
-    // Initialize Stripe with the public key passed from PHP
-    var stripe = Stripe(ssc_stripe.public_key);
-    var elements = stripe.elements();
-    var card = elements.create('card');
-    card.mount('#card-element');
+document.addEventListener("DOMContentLoaded", function () {
+    let checkoutForm = document.getElementById("ssc-checkout-form");
+    if (checkoutForm) {
+        // Initialize Stripe Elements using the localized stripe_key
+        var stripe = Stripe(ssc_ajax.stripe_key);
+        var elements = stripe.elements();
+        var cardElement = elements.create('card');
+        cardElement.mount('#ssc-payment-element');
 
-    // Handle payment submission
-    $('#ssc-submit-payment').on('click', function(e) {
-        e.preventDefault();
-        $('#ssc-submit-payment').prop('disabled', true);
-        
-        // Request a PaymentIntent from the server
-        $.post(ssc_ajax.ajax_url, { action: 'ssc_process_payment' }, function(response) {
-            if (response.success) {
-                var clientSecret = response.data.client_secret;
-                stripe.confirmCardPayment(clientSecret, {
-                    payment_method: { card: card }
-                }).then(function(result) {
-                    if (result.error) {
-                        $('#ssc-payment-message').text(result.error.message);
-                        $('#ssc-submit-payment').prop('disabled', false);
-                    } else if (result.paymentIntent && result.paymentIntent.status === 'succeeded') {
-                        $('#ssc-payment-message').text('Payment succeeded!');
-                        // Optionally, clear the cart and store the order here.
-                    }
-                });
-            } else {
-                $('#ssc-payment-message').text(response.data);
-                $('#ssc-submit-payment').prop('disabled', false);
-            }
+        checkoutForm.addEventListener("submit", function (event) {
+            event.preventDefault();
+            processPayment(cardElement, stripe);
         });
-    });
+    }
 });
+
+function processPayment(cardElement, stripe) {
+    // Create a payment method using Stripe Elements
+    stripe.createPaymentMethod({
+        type: 'card',
+        card: cardElement,
+    }).then(function(result) {
+        if (result.error) {
+            document.getElementById("ssc-checkout-message").innerText = result.error.message;
+        } else {
+            let data = new FormData();
+            data.append("action", "ssc_process_payment");
+            data.append("payment_method", result.paymentMethod.id);
+
+            fetch(ssc_ajax.ajax_url, {
+                method: "POST",
+                body: data,
+            })
+            .then(response => response.json())
+            .then(responseData => {
+                if (responseData.success) {
+                    document.getElementById("ssc-checkout-message").innerText = "Payment successful!";
+                    document.getElementById("ssc-cart-items").innerHTML = "";
+                    document.getElementById("ssc-cart-total").innerText = "0.00";
+                } else {
+                    document.getElementById("ssc-checkout-message").innerText = "Payment failed: " + responseData.data.message;
+                }
+            })
+            .catch(error => console.error("Error processing payment:", error));
+        }
+    });
+}
