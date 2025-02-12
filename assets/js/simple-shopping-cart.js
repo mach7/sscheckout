@@ -71,6 +71,10 @@ jQuery(document).ready(function ($) {
                         $.post(sscheckout_params.ajax_url, formData, function (response) {
                             if (response.success) {
                                 $("#ss-checkout-response").html("<p>" + response.data + "</p>");
+                                // Reload the page after 2 seconds to clear the cart.
+                                setTimeout(function() {
+                                    location.reload();
+                                }, 2000);
                             } else {
                                 $("#ss-checkout-response").html("<p>Error: " + response.data + "</p>");
                                 $("#ss-checkout-form").find('button[type="submit"]').prop("disabled", false);
@@ -81,7 +85,7 @@ jQuery(document).ready(function ($) {
         });
     } // End if cardElementDiv exists
 
-    // Always bind the "Add to Cart" click event, regardless of #card-element.
+    // Bind the "Add to Cart" click event (works on all pages).
     $(".ssc-add-to-cart").on("click", function (e) {
         e.preventDefault();
         var $productElem = $(this).closest(".ssc-product");
@@ -110,49 +114,48 @@ jQuery(document).ready(function ($) {
     });
 
     // Bind event for increasing the quantity.
-$(document).on("click", ".ssc-plus", function (e) {
-    e.preventDefault();
-    var $element = $(this).closest(".ssc-product, tr[data-product]");
-    var productName = $element.data("product");
-    $.post(sscheckout_params.ajax_url, {
-        action: "ssc_update_cart",
-        product: productName,
-        action_type: "plus"
-    }, function (response) {
-        if (response.success) {
-            // Update quantity for different layouts.
-            if ($element.is("tr")) {
-                $element.find(".ssc-item-quantity").text(response.data.quantity);
+    $(document).on("click", ".ssc-plus", function (e) {
+        e.preventDefault();
+        var $element = $(this).closest(".ssc-product, tr[data-product]");
+        var productName = $element.data("product");
+        $.post(sscheckout_params.ajax_url, {
+            action: "ssc_update_cart",
+            product: productName,
+            action_type: "plus"
+        }, function (response) {
+            if (response.success) {
+                if ($element.is("tr")) {
+                    $element.find(".ssc-item-quantity").text(response.data.quantity);
+                } else {
+                    $element.find(".ssc-quantity").text(response.data.quantity);
+                }
             } else {
-                $element.find(".ssc-quantity").text(response.data.quantity);
+                console.log("Error updating cart (plus): " + response.data);
             }
-        } else {
-            console.log("Error updating cart (plus): " + response.data);
-        }
+        });
     });
-});
 
-// Bind event for decreasing the quantity.
-$(document).on("click", ".ssc-minus", function (e) {
-    e.preventDefault();
-    var $element = $(this).closest(".ssc-product, tr[data-product]");
-    var productName = $element.data("product");
-    $.post(sscheckout_params.ajax_url, {
-        action: "ssc_update_cart",
-        product: productName,
-        action_type: "minus"
-    }, function (response) {
-        if (response.success) {
-            if ($element.is("tr")) {
-                $element.find(".ssc-item-quantity").text(response.data.quantity);
+    // Bind event for decreasing the quantity.
+    $(document).on("click", ".ssc-minus", function (e) {
+        e.preventDefault();
+        var $element = $(this).closest(".ssc-product, tr[data-product]");
+        var productName = $element.data("product");
+        $.post(sscheckout_params.ajax_url, {
+            action: "ssc_update_cart",
+            product: productName,
+            action_type: "minus"
+        }, function (response) {
+            if (response.success) {
+                if ($element.is("tr")) {
+                    $element.find(".ssc-item-quantity").text(response.data.quantity);
+                } else {
+                    $element.find(".ssc-quantity").text(response.data.quantity);
+                }
             } else {
-                $element.find(".ssc-quantity").text(response.data.quantity);
+                console.log("Error updating cart (minus): " + response.data);
             }
-        } else {
-            console.log("Error updating cart (minus): " + response.data);
-        }
+        });
     });
-});
 
     // Bind event for removing the item from the cart.
     $(document).on("click", ".ssc-remove", function (e) {
@@ -172,5 +175,4 @@ $(document).on("click", ".ssc-minus", function (e) {
             }
         });
     });
-
 });
