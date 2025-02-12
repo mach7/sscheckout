@@ -2,7 +2,7 @@
 /*
 Plugin Name: Simple Shopping Cart
 Description: A simple shopping cart plugin with Stripe checkout integration.
-Version: 1.1.6.3
+Version: 1.1.6.4
 Author: Tyson Brooks
 Author URI: https://frostlineworks.com
 Tested up to: 6.2
@@ -541,44 +541,45 @@ add_action('plugins_loaded', function () {
                     echo '<div class="error"><p>Stripe secret key not set.</p></div>';
                     return;
                 }
-
+            
                 // Use cURL to call Stripe's Charges API for the last 20 charges.
                 $ch = curl_init( 'https://api.stripe.com/v1/charges?limit=20' );
                 curl_setopt( $ch, CURLOPT_USERPWD, $stripe_secret . ':' );
                 curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
                 $response = curl_exec( $ch );
                 curl_close( $ch );
-
+            
                 $charges = json_decode( $response, true );
                 if ( isset( $charges['error'] ) ) {
                     echo '<div class="error"><p>Error retrieving transactions: ' . esc_html( $charges['error']['message'] ) . '</p></div>';
                     return;
                 }
-
+            
                 echo '<div class="wrap"><h1>Stripe Transactions</h1>';
+                // Add a search input field for filtering by customer name.
+                echo '<input type="text" id="ssc-transaction-search" placeholder="Search by customer name..." style="margin-bottom:10px; padding:5px; width:300px;">';
+            
                 echo '<table class="wp-list-table widefat fixed striped">';
                 echo '<thead><tr>';
-                echo '<th>Customer</th>'; // New column for customer name
+                echo '<th>Customer</th>'; // Customer name is now in the first column.
                 echo '<th>ID</th>';
                 echo '<th>Amount</th>';
                 echo '<th>Status</th>';                
                 echo '<th>Created</th>';
                 echo '</tr></thead><tbody>';
-
+            
                 foreach ( $charges['data'] as $charge ) {
                     // Format the created timestamp.
                     $created = date( 'Y-m-d H:i:s', $charge['created'] );
-
-                    // Attempt to retrieve the customer name.
+            
+                    // Determine the customer name.
                     $customer_name = 'N/A';
-                    // First check if the charge's source (if created from a token) has a name.
                     if ( isset( $charge['source']['name'] ) && ! empty( $charge['source']['name'] ) ) {
                         $customer_name = $charge['source']['name'];
                     } elseif ( isset( $charge['billing_details']['name'] ) && ! empty( $charge['billing_details']['name'] ) ) {
-                        // Otherwise check the billing_details array.
                         $customer_name = $charge['billing_details']['name'];
                     }
-
+            
                     echo '<tr>';
                     echo '<td>' . esc_html( $customer_name ) . '</td>';
                     echo '<td>' . esc_html( $charge['id'] ) . '</td>';
@@ -587,9 +588,27 @@ add_action('plugins_loaded', function () {
                     echo '<td>' . esc_html( $created ) . '</td>';
                     echo '</tr>';
                 }
-
-                echo '</tbody></table></div>';
+            
+                echo '</tbody></table>';
+            
+                // Inline JavaScript for the search filter.
+                echo <<<HTML
+            <script>
+            jQuery(document).ready(function($) {
+                $("#ssc-transaction-search").on("keyup", function() {
+                    var value = $(this).val().toLowerCase();
+                    $(".wp-list-table tbody tr").filter(function() {
+                        // The customer name is in the first column.
+                        $(this).toggle($(this).find("td:nth-child(1)").text().toLowerCase().indexOf(value) > -1);
+                    });
+                });
+            });
+            </script>
+            HTML;
+            
+                echo '</div>';
             }
+            
 
 		}
 
