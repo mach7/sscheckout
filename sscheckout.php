@@ -2,7 +2,7 @@
 /*
 Plugin Name: Simple Shopping Cart
 Description: A simple shopping cart plugin with Stripe checkout integration.
-Version: 1.1.7.2
+Version: 1.1.7.3
 Author: Tyson Brooks
 Author URI: https://frostlineworks.com
 Tested up to: 6.2
@@ -489,16 +489,28 @@ add_action('plugins_loaded', function () {
 				}
 
 				// Send order email to admin.
-				$admin_email = get_option( 'ssc_order_admin_email' );
-				if ( ! $admin_email ) {
-					$admin_email = get_option( 'admin_email' );
-				}
-				$subject  = 'New Order Received: ' . $order_id;
-				$message  = "Order Details:\n";
-				foreach ( $items as $item ) {
-					$message .= $item->product_name . ' x ' . $item->quantity . ' - $' . $item->product_price . "\n";
-				}
-				wp_mail( $admin_email, $subject, $message );
+                $admin_email = get_option( 'ssc_order_admin_email' );
+                if ( ! $admin_email ) {
+                    $admin_email = get_option( 'admin_email' );
+                }
+                $subject = 'New Order Received: ' . $order_id;
+
+                $message  = "New Order Received\n\n";
+                $message .= "Customer Details:\n";
+                $message .= "Name: " . $name . "\n";
+                if ( ! empty( $email ) ) {
+                    $message .= "Email: " . $email . "\n";
+                }
+                if ( ! empty( $phone ) ) {
+                    $message .= "Phone: " . $phone . "\n";
+                }
+                $message .= "\nOrder Details:\n";
+                foreach ( $items as $item ) {
+                    $message .= $item->product_name . ' x ' . $item->quantity . ' - $' . $item->product_price . "\n";
+                }
+
+                wp_mail( $admin_email, $subject, $message );
+
 
 				// Move cart items to order history.
 				foreach ( $items as $item ) {
