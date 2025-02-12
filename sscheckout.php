@@ -216,7 +216,9 @@ add_action('plugins_loaded', function () {
 			 */
 			public function enqueue_scripts() {
                 // Only load Stripe scripts on the checkout page.
+                wp_enqueue_script( 'stripe-js', 'https://js.stripe.com/v3/', array(), null, true );
                 if ( is_page( 'checkout' ) ) {
+
                     wp_enqueue_script(
                         'simple-shopping-cart',
                         plugins_url( 'assets/js/simple-shopping-cart.js', __FILE__ ),
