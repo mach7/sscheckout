@@ -85,6 +85,13 @@ add_action( 'plugins_loaded', function () {
 
 				// Register admin settings submenu.
 				add_action( 'admin_menu', [ $this, 'register_submenu' ] );
+                // Place this early in your plugin file (before any output)
+                add_action( 'init', function() {
+                    if ( ! is_user_logged_in() && ! isset( $_COOKIE['ssc_uid'] ) ) {
+                        $uid = 'guest_' . wp_generate_uuid4();
+                        setcookie( 'ssc_uid', $uid, time() + ( 3600 * 24 * 30 ), COOKIEPATH, COOKIE_DOMAIN );
+                    }
+                } );
 			}
 
 			/**
@@ -190,13 +197,7 @@ add_action( 'plugins_loaded', function () {
 					plugins_url( 'assets/css/simple-shopping-cart.css', __FILE__ )
 				);
 			}
-            // Place this early in your plugin file (before any output)
-            add_action( 'init', function() {
-                if ( ! is_user_logged_in() && ! isset( $_COOKIE['ssc_uid'] ) ) {
-                    $uid = 'guest_' . wp_generate_uuid4();
-                    setcookie( 'ssc_uid', $uid, time() + ( 3600 * 24 * 30 ), COOKIEPATH, COOKIE_DOMAIN );
-                }
-            } );
+            
 
 			/**
 			 * Returns a unique identifier for the current user.
