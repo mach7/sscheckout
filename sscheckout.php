@@ -777,7 +777,7 @@ add_action('plugins_loaded', function () {
                         </table>
                         <hr>
                         <h2>Store Hours</h2>
-                        <p>Set the open and close times for each day of the week. Check the box to mark a day as closed.</p>
+                        <p>Set the open and close times for each day of the week in 12‑hour format (e.g., 08:00 AM or 05:00 PM). Check the box if the store is closed that day.</p>
                         <table class="widefat">
                             <thead>
                                 <tr>
@@ -796,10 +796,10 @@ add_action('plugins_loaded', function () {
                                 <tr>
                                     <td><?php echo esc_html( $day_name ); ?></td>
                                     <td>
-                                        <input type="text" name="store_hours[<?php echo esc_attr( $day_key ); ?>][open]" value="<?php echo esc_attr( $open_time ); ?>" placeholder="08:00">
+                                        <input type="text" name="store_hours[<?php echo esc_attr( $day_key ); ?>][open]" value="<?php echo esc_attr( $open_time ); ?>" placeholder="08:00 AM">
                                     </td>
                                     <td>
-                                        <input type="text" name="store_hours[<?php echo esc_attr( $day_key ); ?>][close]" value="<?php echo esc_attr( $close_time ); ?>" placeholder="17:00">
+                                        <input type="text" name="store_hours[<?php echo esc_attr( $day_key ); ?>][close]" value="<?php echo esc_attr( $close_time ); ?>" placeholder="05:00 PM">
                                     </td>
                                     <td>
                                         <label>
@@ -816,7 +816,7 @@ add_action('plugins_loaded', function () {
                 </div>
                 <?php
             }
-            
+                        
             
 		}
 
