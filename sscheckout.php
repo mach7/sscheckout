@@ -533,49 +533,64 @@ add_action('plugins_loaded', function () {
 			}
 
 			/**
-			 * Render the Stripe Transactions admin page.
-			 */
-			public function render_stripe_transactions_page() {
-				$stripe_secret = get_option( 'flw_stripe_secret_key' );
-				if ( ! $stripe_secret ) {
-					echo '<div class="error"><p>Stripe secret key not set.</p></div>';
-					return;
-				}
+             * Render the Stripe Transactions admin page.
+             */
+            public function render_stripe_transactions_page() {
+                $stripe_secret = get_option( 'flw_stripe_secret_key' );
+                if ( ! $stripe_secret ) {
+                    echo '<div class="error"><p>Stripe secret key not set.</p></div>';
+                    return;
+                }
 
-				// Use cURL to call Stripe's Charges API for the last 20 charges.
-				$ch = curl_init( 'https://api.stripe.com/v1/charges?limit=20' );
-				curl_setopt( $ch, CURLOPT_USERPWD, $stripe_secret . ':' );
-				curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
-				$response = curl_exec( $ch );
-				curl_close( $ch );
+                // Use cURL to call Stripe's Charges API for the last 20 charges.
+                $ch = curl_init( 'https://api.stripe.com/v1/charges?limit=20' );
+                curl_setopt( $ch, CURLOPT_USERPWD, $stripe_secret . ':' );
+                curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
+                $response = curl_exec( $ch );
+                curl_close( $ch );
 
-				$charges = json_decode( $response, true );
-				if ( isset( $charges['error'] ) ) {
-					echo '<div class="error"><p>Error retrieving transactions: ' . esc_html( $charges['error']['message'] ) . '</p></div>';
-					return;
-				}
+                $charges = json_decode( $response, true );
+                if ( isset( $charges['error'] ) ) {
+                    echo '<div class="error"><p>Error retrieving transactions: ' . esc_html( $charges['error']['message'] ) . '</p></div>';
+                    return;
+                }
 
-				echo '<div class="wrap"><h1>Stripe Transactions</h1>';
-				echo '<table class="wp-list-table widefat fixed striped">';
-				echo '<thead><tr>';
-				echo '<th>ID</th>';
-				echo '<th>Amount</th>';
-				echo '<th>Status</th>';
-				echo '<th>Created</th>';
-				echo '</tr></thead><tbody>';
+                echo '<div class="wrap"><h1>Stripe Transactions</h1>';
+                echo '<table class="wp-list-table widefat fixed striped">';
+                echo '<thead><tr>';
+                echo '<th>ID</th>';
+                echo '<th>Amount</th>';
+                echo '<th>Status</th>';
+                echo '<th>Customer</th>'; // New column for customer name
+                echo '<th>Created</th>';
+                echo '</tr></thead><tbody>';
 
-				foreach ( $charges['data'] as $charge ) {
-					$created = date( 'Y-m-d H:i:s', $charge['created'] );
-					echo '<tr>';
-					echo '<td>' . esc_html( $charge['id'] ) . '</td>';
-					echo '<td>' . esc_html( number_format( $charge['amount'] / 100, 2 ) ) . ' ' . esc_html( strtoupper( $charge['currency'] ) ) . '</td>';
-					echo '<td>' . esc_html( $charge['status'] ) . '</td>';
-					echo '<td>' . esc_html( $created ) . '</td>';
-					echo '</tr>';
-				}
+                foreach ( $charges['data'] as $charge ) {
+                    // Format the created timestamp.
+                    $created = date( 'Y-m-d H:i:s', $charge['created'] );
 
-				echo '</tbody></table></div>';
-			}
+                    // Attempt to retrieve the customer name.
+                    $customer_name = 'N/A';
+                    // First check if the charge's source (if created from a token) has a name.
+                    if ( isset( $charge['source']['name'] ) && ! empty( $charge['source']['name'] ) ) {
+                        $customer_name = $charge['source']['name'];
+                    } elseif ( isset( $charge['billing_details']['name'] ) && ! empty( $charge['billing_details']['name'] ) ) {
+                        // Otherwise check the billing_details array.
+                        $customer_name = $charge['billing_details']['name'];
+                    }
+
+                    echo '<tr>';
+                    echo '<td>' . esc_html( $charge['id'] ) . '</td>';
+                    echo '<td>' . esc_html( number_format( $charge['amount'] / 100, 2 ) ) . ' ' . esc_html( strtoupper( $charge['currency'] ) ) . '</td>';
+                    echo '<td>' . esc_html( $charge['status'] ) . '</td>';
+                    echo '<td>' . esc_html( $customer_name ) . '</td>';
+                    echo '<td>' . esc_html( $created ) . '</td>';
+                    echo '</tr>';
+                }
+
+                echo '</tbody></table></div>';
+            }
+
 		}
 
 		// Initialize the plugin.
