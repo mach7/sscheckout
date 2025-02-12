@@ -2,7 +2,7 @@
 /*
 Plugin Name: Simple Shopping Cart
 Description: A simple shopping cart plugin with Stripe checkout integration.
-Version: 1.1.7
+Version: 1.1.7.1
 Author: Tyson Brooks
 Author URI: https://frostlineworks.com
 Tested up to: 6.2
@@ -176,7 +176,6 @@ add_action('plugins_loaded', function () {
 
 				// Define the updated SQL for the shopping cart table.
 				$table1 = $wpdb->prefix . 'flw_shopping_cart';
-				// (Modify this SQL as needed for your new structure.)
 				$sql1   = "CREATE TABLE $table1 (
 					id mediumint(9) NOT NULL AUTO_INCREMENT,
 					uid varchar(100) NOT NULL,
@@ -189,7 +188,6 @@ add_action('plugins_loaded', function () {
 
 				// Define the updated SQL for the order history table.
 				$table2 = $wpdb->prefix . 'flw_order_history';
-				// (For example, if you add additional fields, modify this SQL accordingly.)
 				$sql2   = "CREATE TABLE $table2 (
 					id mediumint(9) NOT NULL AUTO_INCREMENT,
 					uid varchar(100) NOT NULL,
@@ -201,7 +199,6 @@ add_action('plugins_loaded', function () {
 					PRIMARY KEY (id)
 				) $charset_collate;";
 
-				// Run the SQL upgrade.
 				dbDelta( $sql1 );
 				dbDelta( $sql2 );
 			}
@@ -218,10 +215,12 @@ add_action('plugins_loaded', function () {
 			 * Enqueues front-end JavaScript and CSS.
 			 */
 			public function enqueue_scripts() {
+				// Enqueue Stripe.js from Stripe's servers.
+				wp_enqueue_script( 'stripe-js', 'https://js.stripe.com/v3/', array(), null, true );
 				wp_enqueue_script(
 					'simple-shopping-cart',
 					plugins_url( 'assets/js/simple-shopping-cart.js', __FILE__ ),
-					[ 'jquery' ],
+					array( 'jquery', 'stripe-js' ),
 					'1.0.0',
 					true
 				);
@@ -411,12 +410,12 @@ add_action('plugins_loaded', function () {
 			 * AJAX handler to process checkout.
 			 */
 			public function process_checkout() {
-				$name      = sanitize_text_field( wp_unslash( $_POST['name'] ) );
-				$email     = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
-				$password  = isset( $_POST['password'] ) ? wp_unslash( $_POST['password'] ) : '';
-				$phone     = sanitize_text_field( wp_unslash( $_POST['phone'] ) );
-				$paymentMethod = sanitize_text_field( wp_unslash( $_POST['paymentMethod'] ) );
-				$uid       = $this->get_user_uid();
+				$name           = sanitize_text_field( wp_unslash( $_POST['name'] ) );
+				$email          = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
+				$password       = isset( $_POST['password'] ) ? wp_unslash( $_POST['password'] ) : '';
+				$phone          = sanitize_text_field( wp_unslash( $_POST['phone'] ) );
+				$paymentMethod  = sanitize_text_field( wp_unslash( $_POST['paymentMethod'] ) );
+				$uid            = $this->get_user_uid();
 
 				global $wpdb;
 				$cart_table  = $wpdb->prefix . 'flw_shopping_cart';
@@ -427,12 +426,12 @@ add_action('plugins_loaded', function () {
 					wp_send_json_error( 'Cart is empty' );
 				}
 
-				// Calculate the total amount (assumes product_price is in dollars).
+				// Calculate total amount in cents.
 				$total  = 0;
 				foreach ( $items as $item ) {
 					$total += floatval( $item->product_price ) * intval( $item->quantity );
 				}
-				$amount = intval( $total * 100 ); // Convert dollars to cents.
+				$amount = intval( $total * 100 );
 
 				$stripe_secret = get_option( 'flw_stripe_secret_key' );
 				if ( ! $stripe_secret ) {
@@ -442,7 +441,7 @@ add_action('plugins_loaded', function () {
 				// Generate a unique order ID.
 				$order_id = 'ORDER-' . time();
 
-				// --- Create a charge via Stripe API ---
+				// Create a charge via Stripe API.
 				$ch = curl_init( 'https://api.stripe.com/v1/charges' );
 				$charge_data = http_build_query( [
 					'amount'      => $amount,
@@ -462,7 +461,7 @@ add_action('plugins_loaded', function () {
 					wp_send_json_error( 'Stripe charge error: ' . $charge_result['error']['message'] );
 				}
 
-				// --- If not logged in, create a new WP user.
+				// Create a new WP user if not logged in.
 				if ( ! is_user_logged_in() ) {
 					if ( email_exists( $email ) === false ) {
 						$user_id = wp_create_user( $email, $password, $email );
@@ -472,7 +471,7 @@ add_action('plugins_loaded', function () {
 					}
 				}
 
-				// --- Send order email to admin.
+				// Send order email to admin.
 				$admin_email = get_option( 'ssc_order_admin_email' );
 				if ( ! $admin_email ) {
 					$admin_email = get_option( 'admin_email' );
@@ -484,7 +483,7 @@ add_action('plugins_loaded', function () {
 				}
 				wp_mail( $admin_email, $subject, $message );
 
-				// --- Move cart items to order history.
+				// Move cart items to order history.
 				foreach ( $items as $item ) {
 					$wpdb->insert( $order_table, [
 						'uid'           => $uid,
@@ -496,7 +495,7 @@ add_action('plugins_loaded', function () {
 					] );
 				}
 
-				// --- Clear the shopping cart.
+				// Clear the shopping cart.
 				$wpdb->delete( $cart_table, [ 'uid' => $uid ] );
 
 				wp_send_json_success( 'Payment successful and order processed. Order Number: ' . $order_id );
