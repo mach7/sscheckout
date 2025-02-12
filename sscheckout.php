@@ -226,7 +226,7 @@ add_action('plugins_loaded', function () {
                         '1.0.0',
                         true
                     );
-                    wp_localize_script( 'simple-shopping-cart', 'ssc_ajax', [
+                    wp_localize_script( 'simple-shopping-cart', 'sscheckout_params', [
                         'ajax_url' => admin_url( 'admin-ajax.php' ),
                         'publishableKey' => get_option( 'flw_stripe_public_key' ) // ensure your publishable key is passed
                     ] );
