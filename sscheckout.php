@@ -178,10 +178,19 @@ add_action('plugins_loaded', function () {
              * Enqueues front-end JavaScript and CSS.
              */
             public function enqueue_scripts() {
+                // Enqueue the Stripe.js library from Stripe.
+                wp_enqueue_script(
+                    'stripe-js',
+                    'https://js.stripe.com/v3/',
+                    [],
+                    null,
+                    true
+                );
+                // Enqueue our custom JavaScript, making sure it loads after jQuery and Stripe.
                 wp_enqueue_script(
                     'simple-shopping-cart',
                     plugins_url( 'assets/js/simple-shopping-cart.js', __FILE__ ),
-                    [ 'jquery' ],
+                    [ 'jquery', 'stripe-js' ],
                     '1.0.0',
                     true
                 );
