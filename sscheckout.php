@@ -2,7 +2,7 @@
 /*
 Plugin Name: Simple Shopping Cart
 Description: A simple shopping cart plugin with Stripe checkout integration.
-Version: 1.1.6
+Version: 1.1.6.1
 Author: Tyson Brooks
 Author URI: https://frostlineworks.com
 Tested up to: 6.2
@@ -190,7 +190,7 @@ add_action('plugins_loaded', function () {
 				);
 				wp_localize_script( 'simple-shopping-cart', 'ssc_ajax', [
 					'ajax_url'      => admin_url( 'admin-ajax.php' ),
-					'publishableKey'=> get_option( 'flw_stripe_publishable_key' )
+					'publishableKey'=> get_option( 'flw_stripe_public_key' )
 				]);
 				wp_enqueue_style(
 					'simple-shopping-cart',
