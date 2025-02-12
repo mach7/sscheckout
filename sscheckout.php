@@ -2,7 +2,7 @@
 /*
 Plugin Name: Simple Shopping Cart
 Description: A simple shopping cart plugin with Stripe checkout integration.
-Version: 1.1.6.4
+Version: 1.1.7
 Author: Tyson Brooks
 Author URI: https://frostlineworks.com
 Tested up to: 6.2
@@ -79,8 +79,8 @@ add_action('plugins_loaded', function () {
 				add_action( 'wp_ajax_nopriv_ssc_update_cart', [ $this, 'update_cart' ] );
 				add_action( 'wp_ajax_ssc_checkout', [ $this, 'process_checkout' ] );
 				add_action( 'wp_ajax_nopriv_ssc_checkout', [ $this, 'process_checkout' ] );
-				// Register admin settings and transactions submenu.
-				add_action( 'admin_menu', [ $this, 'register_submenus' ] );
+				// Register admin submenu pages.
+				add_action( 'admin_menu', [ $this, 'register_submenu' ] );
 				// Set a cookie for guest users.
 				add_action( 'init', function() {
 					if ( ! is_user_logged_in() && ! isset( $_COOKIE['ssc_uid'] ) ) {
@@ -167,6 +167,46 @@ add_action('plugins_loaded', function () {
 			}
 
 			/**
+			 * Upgrades the database structure by running the current SQL schema.
+			 */
+			public function upgrade_database() {
+				global $wpdb;
+				require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+				$charset_collate = $wpdb->get_charset_collate();
+
+				// Define the updated SQL for the shopping cart table.
+				$table1 = $wpdb->prefix . 'flw_shopping_cart';
+				// (Modify this SQL as needed for your new structure.)
+				$sql1   = "CREATE TABLE $table1 (
+					id mediumint(9) NOT NULL AUTO_INCREMENT,
+					uid varchar(100) NOT NULL,
+					product_name varchar(255) NOT NULL,
+					product_price decimal(10,2) NOT NULL,
+					quantity int NOT NULL DEFAULT 1,
+					added_at datetime DEFAULT CURRENT_TIMESTAMP,
+					PRIMARY KEY (id)
+				) $charset_collate;";
+
+				// Define the updated SQL for the order history table.
+				$table2 = $wpdb->prefix . 'flw_order_history';
+				// (For example, if you add additional fields, modify this SQL accordingly.)
+				$sql2   = "CREATE TABLE $table2 (
+					id mediumint(9) NOT NULL AUTO_INCREMENT,
+					uid varchar(100) NOT NULL,
+					order_id varchar(100) NOT NULL,
+					product_name varchar(255) NOT NULL,
+					product_price decimal(10,2) NOT NULL,
+					quantity int NOT NULL DEFAULT 1,
+					purchased_at datetime DEFAULT CURRENT_TIMESTAMP,
+					PRIMARY KEY (id)
+				) $charset_collate;";
+
+				// Run the SQL upgrade.
+				dbDelta( $sql1 );
+				dbDelta( $sql2 );
+			}
+
+			/**
 			 * Registers the shortcodes: [add_to_cart] and [checkout].
 			 */
 			public function register_shortcodes() {
@@ -187,7 +227,7 @@ add_action('plugins_loaded', function () {
 				);
 				wp_localize_script( 'simple-shopping-cart', 'sscheckout_params', [
 					'ajax_url'      => admin_url( 'admin-ajax.php' ),
-					'publishableKey'=> get_option( 'flw_stripe_public_key' ) // Use your stored publishable key.
+					'publishableKey'=> get_option( 'flw_stripe_public_key' )
 				]);
 				wp_enqueue_style(
 					'simple-shopping-cart',
@@ -304,12 +344,12 @@ add_action('plugins_loaded', function () {
 						<?php endif; ?>
 						<label>Phone: <input type="text" name="phone"></label><br>
 						<h3>Payment Details</h3>
-						<div id="card-element"></div>
+						<div id="card-element"><!-- Stripe Element will be inserted here --></div>
 						<div id="card-errors" role="alert"></div>
 						<input type="hidden" name="action" value="ssc_checkout">
 						<button type="submit">Submit Payment</button>
 					</form>
-					<div id="ssc-checkout-response"></div>
+					<div id="ss-checkout-response"></div>
 				</div>
 				<?php
 				return ob_get_clean();
@@ -375,6 +415,7 @@ add_action('plugins_loaded', function () {
 				$email     = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
 				$password  = isset( $_POST['password'] ) ? wp_unslash( $_POST['password'] ) : '';
 				$phone     = sanitize_text_field( wp_unslash( $_POST['phone'] ) );
+				$paymentMethod = sanitize_text_field( wp_unslash( $_POST['paymentMethod'] ) );
 				$uid       = $this->get_user_uid();
 
 				global $wpdb;
@@ -386,7 +427,8 @@ add_action('plugins_loaded', function () {
 					wp_send_json_error( 'Cart is empty' );
 				}
 
-				$total = 0;
+				// Calculate the total amount (assumes product_price is in dollars).
+				$total  = 0;
 				foreach ( $items as $item ) {
 					$total += floatval( $item->product_price ) * intval( $item->quantity );
 				}
@@ -397,63 +439,30 @@ add_action('plugins_loaded', function () {
 					wp_send_json_error( 'Stripe secret key not found' );
 				}
 
-				// Create a card token via Stripe API.
-				$ch = curl_init( 'https://api.stripe.com/v1/tokens' );
-				$cc_exp = sanitize_text_field( wp_unslash( $_POST['cc_exp'] ) );
-				$exp = explode( '/', $cc_exp );
-				if ( count( $exp ) !== 2 ) {
-					wp_send_json_error( 'Invalid expiration date' );
-				}
-				$exp_month = trim( $exp[0] );
-				$exp_year  = trim( $exp[1] );
-				$cc_number = sanitize_text_field( wp_unslash( $_POST['cc_number'] ) );
-				$cc_cvc    = sanitize_text_field( wp_unslash( $_POST['cc_cvc'] ) );
-				$cc_zip    = sanitize_text_field( wp_unslash( $_POST['cc_zip'] ) );
-				$card_data = http_build_query( [
-					'card[number]'      => $cc_number,
-					'card[cvc]'         => $cc_cvc,
-					'card[exp_month]'   => $exp_month,
-					'card[exp_year]'    => $exp_year,
-					'card[address_zip]' => $cc_zip,
+				// Generate a unique order ID.
+				$order_id = 'ORDER-' . time();
+
+				// --- Create a charge via Stripe API ---
+				$ch = curl_init( 'https://api.stripe.com/v1/charges' );
+				$charge_data = http_build_query( [
+					'amount'      => $amount,
+					'currency'    => 'usd',
+					'source'      => $paymentMethod,
+					'description' => 'Charge for ' . $name,
+					'metadata[order_id]' => $order_id,
 				] );
 				curl_setopt( $ch, CURLOPT_USERPWD, $stripe_secret . ':' );
 				curl_setopt( $ch, CURLOPT_POST, true );
-				curl_setopt( $ch, CURLOPT_POSTFIELDS, $card_data );
+				curl_setopt( $ch, CURLOPT_POSTFIELDS, $charge_data );
 				curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
-				$token_response = curl_exec( $ch );
-				$token_result   = json_decode( $token_response, true );
-				if ( isset( $token_result['error'] ) ) {
-					wp_send_json_error( 'Stripe token error: ' . $token_result['error']['message'] );
-				}
-				$token_id = $token_result['id'];
+				$charge_response = curl_exec( $ch );
+				$charge_result   = json_decode( $charge_response, true );
 				curl_close( $ch );
-
-				// Create a PaymentIntent (with a return_url for redirect-based authentication).
-				$pi_url = 'https://api.stripe.com/v1/payment_intents';
-				// In this example we assume you’re using manual confirmation.
-				$pi_data = http_build_query( [
-					'amount'              => $amount,
-					'currency'            => 'usd',
-					'payment_method'      => $token_id,
-					'confirmation_method' => 'manual',
-					'confirm'             => 'true',
-					'description'         => 'Charge for ' . $name,
-					'return_url'          => site_url('/checkout/')
-				] );
-				$ch = curl_init( $pi_url );
-				curl_setopt( $ch, CURLOPT_USERPWD, $stripe_secret . ':' );
-				curl_setopt( $ch, CURLOPT_POST, true );
-				curl_setopt( $ch, CURLOPT_POSTFIELDS, $pi_data );
-				curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
-				$pi_response = curl_exec( $ch );
-				$pi_result   = json_decode( $pi_response, true );
-				curl_close( $ch );
-
-				if ( isset( $pi_result['error'] ) ) {
-					wp_send_json_error( 'Stripe PaymentIntent error: ' . $pi_result['error']['message'] );
+				if ( isset( $charge_result['error'] ) ) {
+					wp_send_json_error( 'Stripe charge error: ' . $charge_result['error']['message'] );
 				}
 
-				// Create WP user if not logged in.
+				// --- If not logged in, create a new WP user.
 				if ( ! is_user_logged_in() ) {
 					if ( email_exists( $email ) === false ) {
 						$user_id = wp_create_user( $email, $password, $email );
@@ -463,12 +472,11 @@ add_action('plugins_loaded', function () {
 					}
 				}
 
-				// Send order email to admin.
+				// --- Send order email to admin.
 				$admin_email = get_option( 'ssc_order_admin_email' );
 				if ( ! $admin_email ) {
 					$admin_email = get_option( 'admin_email' );
 				}
-				$order_id = 'ORDER-' . time();
 				$subject  = 'New Order Received: ' . $order_id;
 				$message  = "Order Details:\n";
 				foreach ( $items as $item ) {
@@ -476,7 +484,7 @@ add_action('plugins_loaded', function () {
 				}
 				wp_mail( $admin_email, $subject, $message );
 
-				// Move cart items to order history.
+				// --- Move cart items to order history.
 				foreach ( $items as $item ) {
 					$wpdb->insert( $order_table, [
 						'uid'           => $uid,
@@ -488,38 +496,163 @@ add_action('plugins_loaded', function () {
 					] );
 				}
 
-				// Clear the shopping cart.
+				// --- Clear the shopping cart.
 				$wpdb->delete( $cart_table, [ 'uid' => $uid ] );
 
-				wp_send_json_success( 'Payment successful and order processed.' );
+				wp_send_json_success( 'Payment successful and order processed. Order Number: ' . $order_id );
 			}
 
 			/**
-			 * Registers two admin submenu pages: one for settings and one for Stripe transactions.
+			 * Renders the Stripe Transactions admin page.
 			 */
-			public function register_submenus() {
-				// Settings submenu.
+			public function render_stripe_transactions_page() {
+				$stripe_secret = get_option( 'flw_stripe_secret_key' );
+				if ( ! $stripe_secret ) {
+					echo '<div class="error"><p>Stripe secret key not set.</p></div>';
+					return;
+				}
+
+				$ch = curl_init( 'https://api.stripe.com/v1/charges?limit=20' );
+				curl_setopt( $ch, CURLOPT_USERPWD, $stripe_secret . ':' );
+				curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
+				$response = curl_exec( $ch );
+				curl_close( $ch );
+
+				$charges = json_decode( $response, true );
+				if ( isset( $charges['error'] ) ) {
+					echo '<div class="error"><p>Error retrieving transactions: ' . esc_html( $charges['error']['message'] ) . '</p></div>';
+					return;
+				}
+
+				echo '<div class="wrap"><h1>Stripe Transactions</h1>';
+				echo '<table class="wp-list-table widefat fixed striped">';
+				echo '<thead><tr>';
+				echo '<th>Customer</th>';
+				echo '<th>Order Number</th>';
+				echo '<th>ID</th>';
+				echo '<th>Amount</th>';
+				echo '<th>Status</th>';
+				echo '<th>Created</th>';
+				echo '</tr></thead><tbody>';
+
+				foreach ( $charges['data'] as $charge ) {
+					$created = date( 'Y-m-d H:i:s', $charge['created'] );
+
+					$customer_name = 'N/A';
+					if ( isset( $charge['source']['name'] ) && ! empty( $charge['source']['name'] ) ) {
+						$customer_name = $charge['source']['name'];
+					} elseif ( isset( $charge['billing_details']['name'] ) && ! empty( $charge['billing_details']['name'] ) ) {
+						$customer_name = $charge['billing_details']['name'];
+					}
+
+					$order_id = 'N/A';
+					if ( isset( $charge['metadata']['order_id'] ) && ! empty( $charge['metadata']['order_id'] ) ) {
+						$order_id_text = $charge['metadata']['order_id'];
+						$order_link = admin_url( 'admin.php?page=simple-shopping-cart-order-details&order_id=' . urlencode( $order_id_text ) );
+						$order_id = '<a href="' . esc_url( $order_link ) . '">' . esc_html( $order_id_text ) . '</a>';
+					}
+
+					echo '<tr>';
+					echo '<td>' . esc_html( $customer_name ) . '</td>';
+					echo '<td>' . $order_id . '</td>';
+					echo '<td>' . esc_html( $charge['id'] ) . '</td>';
+					echo '<td>' . esc_html( number_format( $charge['amount'] / 100, 2 ) ) . ' ' . esc_html( strtoupper( $charge['currency'] ) ) . '</td>';
+					echo '<td>' . esc_html( $charge['status'] ) . '</td>';
+					echo '<td>' . esc_html( $created ) . '</td>';
+					echo '</tr>';
+				}
+
+				echo '</tbody></table></div>';
+			}
+
+			/**
+			 * Renders the Order Details admin page.
+			 */
+			public function render_order_details_page() {
+				if ( ! isset( $_GET['order_id'] ) ) {
+					echo '<div class="wrap"><h1>Order Details</h1><p>No order selected.</p></div>';
+					return;
+				}
+				$order_id = sanitize_text_field( wp_unslash( $_GET['order_id'] ) );
+				global $wpdb;
+				$order_table = $wpdb->prefix . 'flw_order_history';
+				$items = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $order_table WHERE order_id = %s", $order_id ) );
+				
+				echo '<div class="wrap"><h1>Order Details: ' . esc_html( $order_id ) . '</h1>';
+				if ( $items ) {
+					echo '<table class="wp-list-table widefat fixed striped">';
+					echo '<thead><tr>';
+					echo '<th>Product</th>';
+					echo '<th>Price</th>';
+					echo '<th>Quantity</th>';
+					echo '<th>Total</th>';
+					echo '</tr></thead><tbody>';
+					$order_total = 0;
+					foreach ( $items as $item ) {
+						$item_total = floatval( $item->product_price ) * intval( $item->quantity );
+						$order_total += $item_total;
+						echo '<tr>';
+						echo '<td>' . esc_html( $item->product_name ) . '</td>';
+						echo '<td>' . esc_html( number_format( $item->product_price, 2 ) ) . '</td>';
+						echo '<td>' . esc_html( $item->quantity ) . '</td>';
+						echo '<td>' . esc_html( number_format( $item_total, 2 ) ) . '</td>';
+						echo '</tr>';
+					}
+					echo '<tr>';
+					echo '<td colspan="3"><strong>Order Total</strong></td>';
+					echo '<td><strong>' . esc_html( number_format( $order_total, 2 ) ) . '</strong></td>';
+					echo '</tr>';
+					echo '</tbody></table>';
+				} else {
+					echo '<p>No items found for this order.</p>';
+				}
+				echo '</div>';
+			}
+
+			/**
+			 * Registers admin submenu pages.
+			 */
+			public function register_submenu() {
+				// Settings page.
 				FLW_Plugin_Library::add_submenu(
 					'Shopping Cart Settings',
 					'simple-shopping-cart',
 					[ $this, 'render_settings_page' ]
 				);
-				// Stripe Transactions submenu.
+				// Order Details page.
+				FLW_Plugin_Library::add_submenu(
+					'Order Details',
+					'simple-shopping-cart-order-details',
+					[ $this, 'render_order_details_page' ]
+				);
+				// Stripe Transactions page.
 				FLW_Plugin_Library::add_submenu(
 					'Stripe Transactions',
-					'stripe-transactions',
+					'simple-shopping-cart-transactions',
 					[ $this, 'render_stripe_transactions_page' ]
 				);
 			}
 
 			/**
-			 * Render the plugin settings page.
+			 * Renders the plugin settings page.
 			 */
 			public function render_settings_page() {
+				// Handle saving settings.
 				if ( isset( $_POST['ssc_save_settings'] ) ) {
 					update_option( 'ssc_order_admin_email', sanitize_email( wp_unslash( $_POST['order_admin_email'] ) ) );
 					echo '<div class="updated"><p>Settings saved.</p></div>';
 				}
+
+				// Handle database upgrade button.
+				if ( isset( $_POST['upgrade_db'] ) ) {
+					if ( ! isset( $_POST['upgrade_db_nonce'] ) || ! wp_verify_nonce( $_POST['upgrade_db_nonce'], 'upgrade_db_action' ) ) {
+						echo '<div class="error"><p>Security check failed. Please try again.</p></div>';
+					} else {
+						$this->upgrade_database();
+						echo '<div class="updated"><p>Database upgraded successfully.</p></div>';
+					}
+				}
+
 				$order_admin_email = get_option( 'ssc_order_admin_email', get_option( 'admin_email' ) );
 				?>
 				<div class="wrap">
@@ -528,88 +661,16 @@ add_action('plugins_loaded', function () {
 						<label>Admin Order Email: <input type="email" name="order_admin_email" value="<?php echo esc_attr( $order_admin_email ); ?>" required></label>
 						<?php submit_button( 'Save Settings', 'primary', 'ssc_save_settings' ); ?>
 					</form>
+					<hr>
+					<h2>Upgrade Database Structure</h2>
+					<p>If you have updated the plugin and need to upgrade the database structure, click the button below.</p>
+					<form method="post" action="">
+						<?php wp_nonce_field( 'upgrade_db_action', 'upgrade_db_nonce' ); ?>
+						<?php submit_button( 'Upgrade Database Structure', 'secondary', 'upgrade_db' ); ?>
+					</form>
 				</div>
 				<?php
 			}
-
-			/**
-             * Render the Stripe Transactions admin page.
-             */
-            public function render_stripe_transactions_page() {
-                $stripe_secret = get_option( 'flw_stripe_secret_key' );
-                if ( ! $stripe_secret ) {
-                    echo '<div class="error"><p>Stripe secret key not set.</p></div>';
-                    return;
-                }
-            
-                // Use cURL to call Stripe's Charges API for the last 20 charges.
-                $ch = curl_init( 'https://api.stripe.com/v1/charges?limit=20' );
-                curl_setopt( $ch, CURLOPT_USERPWD, $stripe_secret . ':' );
-                curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
-                $response = curl_exec( $ch );
-                curl_close( $ch );
-            
-                $charges = json_decode( $response, true );
-                if ( isset( $charges['error'] ) ) {
-                    echo '<div class="error"><p>Error retrieving transactions: ' . esc_html( $charges['error']['message'] ) . '</p></div>';
-                    return;
-                }
-            
-                echo '<div class="wrap"><h1>Stripe Transactions</h1>';
-                // Add a search input field for filtering by customer name.
-                echo '<input type="text" id="ssc-transaction-search" placeholder="Search by customer name..." style="margin-bottom:10px; padding:5px; width:300px;">';
-            
-                echo '<table class="wp-list-table widefat fixed striped">';
-                echo '<thead><tr>';
-                echo '<th>Customer</th>'; // Customer name is now in the first column.
-                echo '<th>ID</th>';
-                echo '<th>Amount</th>';
-                echo '<th>Status</th>';                
-                echo '<th>Created</th>';
-                echo '</tr></thead><tbody>';
-            
-                foreach ( $charges['data'] as $charge ) {
-                    // Format the created timestamp.
-                    $created = date( 'Y-m-d H:i:s', $charge['created'] );
-            
-                    // Determine the customer name.
-                    $customer_name = 'N/A';
-                    if ( isset( $charge['source']['name'] ) && ! empty( $charge['source']['name'] ) ) {
-                        $customer_name = $charge['source']['name'];
-                    } elseif ( isset( $charge['billing_details']['name'] ) && ! empty( $charge['billing_details']['name'] ) ) {
-                        $customer_name = $charge['billing_details']['name'];
-                    }
-            
-                    echo '<tr>';
-                    echo '<td>' . esc_html( $customer_name ) . '</td>';
-                    echo '<td>' . esc_html( $charge['id'] ) . '</td>';
-                    echo '<td>' . esc_html( number_format( $charge['amount'] / 100, 2 ) ) . ' ' . esc_html( strtoupper( $charge['currency'] ) ) . '</td>';
-                    echo '<td>' . esc_html( $charge['status'] ) . '</td>';                    
-                    echo '<td>' . esc_html( $created ) . '</td>';
-                    echo '</tr>';
-                }
-            
-                echo '</tbody></table>';
-            
-                // Inline JavaScript for the search filter.
-                echo <<<HTML
-            <script>
-            jQuery(document).ready(function($) {
-                $("#ssc-transaction-search").on("keyup", function() {
-                    var value = $(this).val().toLowerCase();
-                    $(".wp-list-table tbody tr").filter(function() {
-                        // The customer name is in the first column.
-                        $(this).toggle($(this).find("td:nth-child(1)").text().toLowerCase().indexOf(value) > -1);
-                    });
-                });
-            });
-            </script>
-            HTML;
-            
-                echo '</div>';
-            }
-            
-
 		}
 
 		// Initialize the plugin.
