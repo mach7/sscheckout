@@ -2,7 +2,7 @@
 /*
 Plugin Name: Simple Shopping Cart
 Description: A simple shopping cart plugin with Stripe checkout integration.
-Version: 1.1.7.1
+Version: 1.1.7.2
 Author: Tyson Brooks
 Author URI: https://frostlineworks.com
 Tested up to: 6.2
@@ -215,24 +215,26 @@ add_action('plugins_loaded', function () {
 			 * Enqueues front-end JavaScript and CSS.
 			 */
 			public function enqueue_scripts() {
-				// Enqueue Stripe.js from Stripe's servers.
-				wp_enqueue_script( 'stripe-js', 'https://js.stripe.com/v3/', array(), null, true );
-				wp_enqueue_script(
-					'simple-shopping-cart',
-					plugins_url( 'assets/js/simple-shopping-cart.js', __FILE__ ),
-					array( 'jquery', 'stripe-js' ),
-					'1.0.0',
-					true
-				);
-				wp_localize_script( 'simple-shopping-cart', 'sscheckout_params', [
-					'ajax_url'      => admin_url( 'admin-ajax.php' ),
-					'publishableKey'=> get_option( 'flw_stripe_public_key' )
-				]);
-				wp_enqueue_style(
-					'simple-shopping-cart',
-					plugins_url( 'assets/css/simple-shopping-cart.css', __FILE__ )
-				);
-			}
+                // Only load Stripe scripts on the checkout page.
+                if ( is_page( 'checkout' ) ) {
+                    wp_enqueue_script(
+                        'simple-shopping-cart',
+                        plugins_url( 'assets/js/simple-shopping-cart.js', __FILE__ ),
+                        [ 'jquery' ],
+                        '1.0.0',
+                        true
+                    );
+                    wp_localize_script( 'simple-shopping-cart', 'ssc_ajax', [
+                        'ajax_url' => admin_url( 'admin-ajax.php' ),
+                        'publishableKey' => get_option( 'flw_stripe_public_key' ) // ensure your publishable key is passed
+                    ] );
+                    wp_enqueue_style(
+                        'simple-shopping-cart',
+                        plugins_url( 'assets/css/simple-shopping-cart.css', __FILE__ )
+                    );
+                }
+            }
+            
 
 			/**
 			 * Returns a unique identifier for the current user.
