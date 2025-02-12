@@ -2,7 +2,7 @@
 /*
 Plugin Name: Simple Shopping Cart
 Description: A simple shopping cart plugin with Stripe checkout integration.
-Version: 1.1.6.2
+Version: 1.1.6.3
 Author: Tyson Brooks
 Author URI: https://frostlineworks.com
 Tested up to: 6.2
@@ -558,10 +558,10 @@ add_action('plugins_loaded', function () {
                 echo '<div class="wrap"><h1>Stripe Transactions</h1>';
                 echo '<table class="wp-list-table widefat fixed striped">';
                 echo '<thead><tr>';
+                echo '<th>Customer</th>'; // New column for customer name
                 echo '<th>ID</th>';
                 echo '<th>Amount</th>';
-                echo '<th>Status</th>';
-                echo '<th>Customer</th>'; // New column for customer name
+                echo '<th>Status</th>';                
                 echo '<th>Created</th>';
                 echo '</tr></thead><tbody>';
 
@@ -580,10 +580,10 @@ add_action('plugins_loaded', function () {
                     }
 
                     echo '<tr>';
+                    echo '<td>' . esc_html( $customer_name ) . '</td>';
                     echo '<td>' . esc_html( $charge['id'] ) . '</td>';
                     echo '<td>' . esc_html( number_format( $charge['amount'] / 100, 2 ) ) . ' ' . esc_html( strtoupper( $charge['currency'] ) ) . '</td>';
-                    echo '<td>' . esc_html( $charge['status'] ) . '</td>';
-                    echo '<td>' . esc_html( $customer_name ) . '</td>';
+                    echo '<td>' . esc_html( $charge['status'] ) . '</td>';                    
                     echo '<td>' . esc_html( $created ) . '</td>';
                     echo '</tr>';
                 }
