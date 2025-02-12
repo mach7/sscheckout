@@ -1,7 +1,7 @@
 console.log("SSC Cart JS Loaded");
 
 document.addEventListener("DOMContentLoaded", function () {
-    // Load cart on page load
+    // Load cart on page load.
     loadCart();
 
     document.body.addEventListener("click", function (event) {

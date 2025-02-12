@@ -149,8 +149,8 @@ class SSC_Cart {
 add_action( 'wp_ajax_ssc_update_cart', ['SSC_Cart', 'handle_cart_update'] );
 add_action( 'wp_ajax_nopriv_ssc_update_cart', ['SSC_Cart', 'handle_cart_update'] );
 
-add_action( 'wp_ajax_ssc_load_cart', ['SSC_Cart', 'load_cart'] );
-add_action( 'wp_ajax_nopriv_ssc_load_cart', ['SSC_Cart', 'load_cart'] );
+add_action('wp_ajax_ssc_load_cart', ['SSC_Cart', 'load_cart']);
+add_action('wp_ajax_nopriv_ssc_load_cart', ['SSC_Cart', 'load_cart']);
 
 function ssc_load_cart() {
     $user_id   = SSC_Cart::get_user_id();

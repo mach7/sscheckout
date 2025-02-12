@@ -1,7 +1,7 @@
 document.addEventListener("DOMContentLoaded", function () {
     let checkoutForm = document.getElementById("ssc-checkout-form");
     if (checkoutForm) {
-        // Initialize Stripe Elements using the localized stripe_key
+        // Initialize Stripe Elements using the localized stripe_key.
         var stripe = Stripe(ssc_ajax.stripe_key);
         var elements = stripe.elements();
         var cardElement = elements.create('card');
@@ -15,7 +15,7 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 function processPayment(cardElement, stripe) {
-    // Create a payment method using Stripe Elements
+    // Create a payment method using Stripe Elements.
     stripe.createPaymentMethod({
         type: 'card',
         card: cardElement,

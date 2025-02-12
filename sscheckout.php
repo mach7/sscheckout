@@ -118,12 +118,15 @@ function ssc_register_shortcodes() {
     add_shortcode('Checkout', ['SSC_Checkout', 'checkout_page']);
 }
 add_action('init', 'ssc_register_shortcodes');
-
 function ssc_enqueue_scripts() {
-    wp_enqueue_script( 'ssc-cart-js', plugin_dir_url( __FILE__ ) . 'assets/js/cart.js', ['jquery'], null, true );
-    wp_enqueue_script( 'ssc-checkout-js', plugin_dir_url( __FILE__ ) . 'assets/js/checkout.js', ['jquery'], null, true );
+    // Enqueue Stripe JS from the official CDN.
+    wp_enqueue_script( 'stripe-js', 'https://js.stripe.com/v3/', array(), null, true );
+
+    // Enqueue the cart and checkout scripts.
+    wp_enqueue_script( 'ssc-cart-js', plugin_dir_url( __FILE__ ) . 'assets/js/cart.js', array( 'jquery' ), null, true );
+    wp_enqueue_script( 'ssc-checkout-js', plugin_dir_url( __FILE__ ) . 'assets/js/checkout.js', array( 'jquery', 'stripe-js' ), null, true );
     
-    // Localize the scripts with common data (using the same object for both)
+    // Localize the scripts with common data.
     wp_localize_script( 'ssc-cart-js', 'ssc_ajax', [
         'ajax_url'   => admin_url( 'admin-ajax.php' ),
         'debug'      => is_debug_mode_enabled(),
