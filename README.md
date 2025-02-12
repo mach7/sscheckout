@@ -1,2 +1,0 @@
-# Simple Stripe Checkout 
-# sscheckout

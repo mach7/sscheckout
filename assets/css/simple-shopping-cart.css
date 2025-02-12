@@ -1,0 +1,17 @@
+.ssc-cart-table {
+	width: 100%;
+	border-collapse: collapse;
+	margin-bottom: 20px;
+}
+.ssc-cart-table th,
+.ssc-cart-table td {
+	border: 1px solid #ddd;
+	padding: 8px;
+	text-align: center;
+}
+.ssc-product button,
+.ssc-checkout button {
+	margin: 2px;
+	padding: 5px 10px;
+	cursor: pointer;
+}
