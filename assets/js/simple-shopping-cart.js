@@ -1,6 +1,6 @@
 jQuery(document).ready(function ($) {
-    // Initialize Stripe with your publishable key passed via wp_localize_script.
-    var stripe = Stripe(sscheckout_params.publishableKey);
+    // Initialize Stripe using the publishable key passed from PHP.
+    var stripe = Stripe(ssc_ajax.publishableKey);
     var elements = stripe.elements();
 
     // Custom styling for the Stripe Element.
@@ -20,7 +20,7 @@ jQuery(document).ready(function ($) {
         }
     };
 
-    // Create the card Element.
+    // Create the card Element and mount it.
     var card = elements.create("card", { style: style });
     card.mount("#card-element");
 
@@ -34,46 +34,44 @@ jQuery(document).ready(function ($) {
         }
     });
 
-    // Handle form submission.
-    $("#ss-checkout-form").submit(function (e) {
+    // Intercept the checkout form submission.
+    $("#ssc-checkout-form").submit(function (e) {
         e.preventDefault();
-        // Disable the submit button to prevent repeated clicks.
-        $(this).find('button[type="submit"]').prop("disabled", true);
+        var $form = $(this);
+        $form.find('button[type="submit"]').prop("disabled", true);
 
-        stripe
-            .createPaymentMethod({
-                type: "card",
-                card: card,
-                billing_details: {
+        // Create a PaymentMethod using Stripe Elements.
+        stripe.createPaymentMethod({
+            type: "card",
+            card: card,
+            billing_details: {
+                name: $("input[name='name']").val(),
+                email: $("input[name='email']").val(),
+                phone: $("input[name='phone']").val()
+            }
+        }).then(function (result) {
+            if (result.error) {
+                $("#card-errors").text(result.error.message);
+                $form.find('button[type="submit"]').prop("disabled", false);
+            } else {
+                // Send the PaymentMethod ID and other form data via AJAX.
+                var formData = {
+                    action: "ssc_checkout",
                     name: $("input[name='name']").val(),
                     email: $("input[name='email']").val(),
-                    phone: $("input[name='phone']").val()
-                }
-            })
-            .then(function (result) {
-                if (result.error) {
-                    $("#card-errors").text(result.error.message);
-                    $("#ss-checkout-form").find('button[type="submit"]').prop("disabled", false);
-                } else {
-                    // Send the PaymentMethod ID to your server.
-                    var paymentMethod = result.paymentMethod.id;
-                    var formData = {
-                        action: "ss_process_checkout",
-                        name: $("input[name='name']").val(),
-                        email: $("input[name='email']").val(),
-                        password: $("input[name='password']").val(),
-                        phone: $("input[name='phone']").val(),
-                        paymentMethod: paymentMethod
-                    };
-                    $.post(sscheckout_params.ajax_url, formData, function (response) {
-                        if (response.success) {
-                            $("#ss-checkout-response").html("<p>" + response.data + "</p>");
-                        } else {
-                            $("#ss-checkout-response").html("<p>Error: " + response.data + "</p>");
-                            $("#ss-checkout-form").find('button[type="submit"]').prop("disabled", false);
-                        }
-                    });
-                }
-            });
+                    password: $("input[name='password']").val(),
+                    phone: $("input[name='phone']").val(),
+                    paymentMethod: result.paymentMethod.id
+                };
+                $.post(ssc_ajax.ajax_url, formData, function (response) {
+                    if (response.success) {
+                        $("#ssc-checkout-response").html("<p>" + response.data + "</p>");
+                    } else {
+                        $("#ssc-checkout-response").html("<p>Error: " + response.data + "</p>");
+                        $form.find('button[type="submit"]').prop("disabled", false);
+                    }
+                });
+            }
+        });
     });
 });
