@@ -24,23 +24,18 @@ jQuery(document).ready(function ($) {
     var card = elements.create("card", { style: style });
     card.mount("#card-element");
 
-    // Handle real-time validation errors from the card Element.
+    // Handle real-time validation errors.
     card.on("change", function (event) {
         var displayError = document.getElementById("card-errors");
-        if (event.error) {
-            displayError.textContent = event.error.message;
-        } else {
-            displayError.textContent = "";
-        }
+        displayError.textContent = event.error ? event.error.message : "";
     });
 
-    // Intercept the checkout form submission.
+    // Handle checkout form submission.
     $("#ssc-checkout-form").submit(function (e) {
         e.preventDefault();
         var $form = $(this);
         $form.find('button[type="submit"]').prop("disabled", true);
 
-        // Create a PaymentMethod using Stripe Elements.
         stripe.createPaymentMethod({
             type: "card",
             card: card,
@@ -54,7 +49,6 @@ jQuery(document).ready(function ($) {
                 $("#card-errors").text(result.error.message);
                 $form.find('button[type="submit"]').prop("disabled", false);
             } else {
-                // Send the PaymentMethod ID and other form data via AJAX.
                 var formData = {
                     action: "ssc_checkout",
                     name: $("input[name='name']").val(),

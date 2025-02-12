@@ -2,7 +2,7 @@
 /*
 Plugin Name: Simple Shopping Cart
 Description: A simple shopping cart plugin with Stripe checkout integration.
-Version: 1.1.5
+Version: 1.1.6
 Author: Tyson Brooks
 Author URI: https://frostlineworks.com
 Tested up to: 6.2
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Ensure the FLW Plugin Library is loaded before running the plugin.
-add_action( 'plugins_loaded', function () {
+add_action('plugins_loaded', function () {
 
 	// Check if the FLW Plugin Update Checker class exists.
 	if ( class_exists( 'FLW_Plugin_Update_Checker' ) ) {
@@ -22,12 +22,12 @@ add_action( 'plugins_loaded', function () {
 		// Initialize the update checker.
 		FLW_Plugin_Update_Checker::initialize( __FILE__, $pluginSlug );
 		// Replace the update icon.
-		add_filter( 'site_transient_update_plugins', function ( $transient ) {
+		add_filter('site_transient_update_plugins', function ($transient) {
 			if ( isset( $transient->response ) ) {
 				foreach ( $transient->response as $plugin_slug => $plugin_data ) {
 					if ( $plugin_slug === plugin_basename( __FILE__ ) ) {
 						$icon_url = plugins_url( 'assets/logo-128x128.png', __FILE__ );
-						$transient->response[ $plugin_slug ]->icons = [
+						$transient->response[$plugin_slug]->icons = [
 							'default' => $icon_url,
 							'1x'      => $icon_url,
 							'2x'      => plugins_url( 'assets/logo-256x256.png', __FILE__ ),
@@ -36,10 +36,10 @@ add_action( 'plugins_loaded', function () {
 				}
 			}
 			return $transient;
-		} );
+		});
 	} else {
 		// Admin notice for missing FLW Plugin Library.
-		add_action( 'admin_notices', function () {
+		add_action('admin_notices', function () {
 			if ( ! function_exists( 'get_plugins' ) ) {
 				require_once ABSPATH . 'wp-admin/includes/plugin.php';
 			}
@@ -54,7 +54,7 @@ add_action( 'plugins_loaded', function () {
 				);
 				echo '<div class="notice notice-error"><p>The FLW Plugin Library is installed but not active. Please <a href="' . esc_url( $activateUrl ) . '">activate</a> it to enable update functionality.</p></div>';
 			}
-		} );
+		});
 	}
 
 	// Check if the FLW Plugin Library is available.
@@ -87,7 +87,7 @@ add_action( 'plugins_loaded', function () {
 						$uid = 'guest_' . wp_generate_uuid4();
 						setcookie( 'ssc_uid', $uid, time() + ( 3600 * 24 * 30 ), COOKIEPATH, COOKIE_DOMAIN );
 					}
-				} );
+				});
 			}
 
 			/**
@@ -178,10 +178,13 @@ add_action( 'plugins_loaded', function () {
 			 * Enqueues front-end JavaScript and CSS.
 			 */
 			public function enqueue_scripts() {
+				// Enqueue Stripe.js from Stripe's CDN.
+				wp_enqueue_script('stripe-js', 'https://js.stripe.com/v3/', array(), null, true);
+				// Enqueue our custom script with stripe-js as a dependency.
 				wp_enqueue_script(
 					'simple-shopping-cart',
 					plugins_url( 'assets/js/simple-shopping-cart.js', __FILE__ ),
-					[ 'jquery' ],
+					[ 'jquery', 'stripe-js' ],
 					'1.0.0',
 					true
 				);
@@ -375,15 +378,15 @@ add_action( 'plugins_loaded', function () {
 			/**
 			 * AJAX handler to process checkout.
 			 *
-			 * Now uses a PaymentMethod ID from Stripe Elements to create and confirm a PaymentIntent.
+			 * Uses a PaymentMethod ID from Stripe Elements to create and confirm a PaymentIntent.
 			 */
 			public function process_checkout() {
-				$name         = sanitize_text_field( wp_unslash( $_POST['name'] ) );
-				$email        = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
-				$password     = isset( $_POST['password'] ) ? wp_unslash( $_POST['password'] ) : '';
-				$phone        = sanitize_text_field( wp_unslash( $_POST['phone'] ) );
-				$paymentMethod= isset( $_POST['paymentMethod'] ) ? sanitize_text_field( wp_unslash( $_POST['paymentMethod'] ) ) : '';
-				$uid          = $this->get_user_uid();
+				$name          = sanitize_text_field( wp_unslash( $_POST['name'] ) );
+				$email         = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
+				$password      = isset( $_POST['password'] ) ? wp_unslash( $_POST['password'] ) : '';
+				$phone         = sanitize_text_field( wp_unslash( $_POST['phone'] ) );
+				$paymentMethod = isset( $_POST['paymentMethod'] ) ? sanitize_text_field( wp_unslash( $_POST['paymentMethod'] ) ) : '';
+				$uid           = $this->get_user_uid();
 
 				global $wpdb;
 				$cart_table  = $wpdb->prefix . 'flw_shopping_cart';
