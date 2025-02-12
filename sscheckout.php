@@ -2,7 +2,7 @@
 /*
 Plugin Name: Simple Shopping Cart
 Description: A simple shopping cart plugin with Stripe checkout integration.
-Version: 1.1.6.1
+Version: 1.1.6.2
 Author: Tyson Brooks
 Author URI: https://frostlineworks.com
 Tested up to: 6.2
@@ -418,12 +418,13 @@ add_action('plugins_loaded', function () {
                     // Create and confirm a PaymentIntent.
                     $pi_url = 'https://api.stripe.com/v1/payment_intents';
                     $pi_data = http_build_query( [
-                        'amount'                => $amount,
-                        'currency'              => 'usd',
-                        'payment_method'        => $payment_method,
-                        'confirmation_method'   => 'manual',
-                        'confirm'               => 'true',
-                        'description'           => 'Charge for ' . $name,
+                        'amount'              => $amount,
+                        'currency'            => 'usd',
+                        'payment_method'      => $payment_method,
+                        'confirmation_method' => 'manual',
+                        'confirm'             => 'true',
+                        'description'         => 'Charge for ' . $name,
+                        'return_url'          => site_url('/checkout/')  // Added return_url parameter.
                     ] );
                     $ch = curl_init( $pi_url );
                     curl_setopt( $ch, CURLOPT_USERPWD, $stripe_secret . ':' );
@@ -445,6 +446,7 @@ add_action('plugins_loaded', function () {
                     } else {
                         $payment_status = 'Payment processed with status: ' . $pi_result['status'];
                     }
+
                 } else {
                     wp_send_json_error( 'PaymentMethod not provided.' );
                 }
