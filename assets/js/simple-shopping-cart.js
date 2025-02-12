@@ -1,51 +1,79 @@
-jQuery(document).ready(function($){
-	// Handle "Add to Cart" click.
-	$('.ssc-add-to-cart').on('click', function(){
-		var container = $(this).closest('.ssc-product');
-		var product   = container.data('product');
-		var price     = container.data('price');
-		$.post(ssc_ajax.ajax_url, {
-			action: 'ssc_update_cart',
-			product: product,
-			action_type: 'add',
-			price: price
-		}, function(response){
-			if(response.success){
-				location.reload();
-			} else {
-				alert(response.data);
-			}
-		});
-	});
+jQuery(document).ready(function ($) {
+    // Initialize Stripe with your publishable key passed via wp_localize_script.
+    var stripe = Stripe(sscheckout_params.publishableKey);
+    var elements = stripe.elements();
 
-	// Handle plus, minus, and remove buttons.
-	$('.ssc-plus, .ssc-minus, .ssc-remove').on('click', function(){
-		var container   = $(this).closest('[data-product]');
-		var product     = container.data('product');
-		var action_type = $(this).data('action');
-		$.post(ssc_ajax.ajax_url, {
-			action: 'ssc_update_cart',
-			product: product,
-			action_type: action_type
-		}, function(response){
-			if(response.success){
-				location.reload();
-			} else {
-				alert(response.data);
-			}
-		});
-	});
+    // Custom styling for the Stripe Element.
+    var style = {
+        base: {
+            color: "#32325d",
+            fontFamily: '"Helvetica Neue", Helvetica, sans-serif',
+            fontSmoothing: "antialiased",
+            fontSize: "16px",
+            "::placeholder": {
+                color: "#aab7c4"
+            }
+        },
+        invalid: {
+            color: "#fa755a",
+            iconColor: "#fa755a"
+        }
+    };
 
-	// Handle checkout form submission.
-	$('#ssc-checkout-form').on('submit', function(e){
-		e.preventDefault();
-		var formData = $(this).serialize();
-		$.post(ssc_ajax.ajax_url, formData, function(response){
-			$('#ssc-checkout-response').html(response.data);
-			if(response.success){
-				// Optionally, reload the page after success.
-				location.reload();
-			}
-		});
-	});
+    // Create the card Element.
+    var card = elements.create("card", { style: style });
+    card.mount("#card-element");
+
+    // Handle real-time validation errors from the card Element.
+    card.on("change", function (event) {
+        var displayError = document.getElementById("card-errors");
+        if (event.error) {
+            displayError.textContent = event.error.message;
+        } else {
+            displayError.textContent = "";
+        }
+    });
+
+    // Handle form submission.
+    $("#ss-checkout-form").submit(function (e) {
+        e.preventDefault();
+        // Disable the submit button to prevent repeated clicks.
+        $(this).find('button[type="submit"]').prop("disabled", true);
+
+        stripe
+            .createPaymentMethod({
+                type: "card",
+                card: card,
+                billing_details: {
+                    name: $("input[name='name']").val(),
+                    email: $("input[name='email']").val(),
+                    phone: $("input[name='phone']").val()
+                }
+            })
+            .then(function (result) {
+                if (result.error) {
+                    $("#card-errors").text(result.error.message);
+                    $("#ss-checkout-form").find('button[type="submit"]').prop("disabled", false);
+                } else {
+                    // Send the PaymentMethod ID to your server.
+                    var paymentMethod = result.paymentMethod.id;
+                    var formData = {
+                        action: "ss_process_checkout",
+                        name: $("input[name='name']").val(),
+                        email: $("input[name='email']").val(),
+                        password: $("input[name='password']").val(),
+                        phone: $("input[name='phone']").val(),
+                        paymentMethod: paymentMethod
+                    };
+                    $.post(sscheckout_params.ajax_url, formData, function (response) {
+                        if (response.success) {
+                            $("#ss-checkout-response").html("<p>" + response.data + "</p>");
+                        } else {
+                            $("#ss-checkout-response").html("<p>Error: " + response.data + "</p>");
+                            $("#ss-checkout-form").find('button[type="submit"]').prop("disabled", false);
+                        }
+                    });
+                }
+            });
+    });
 });
