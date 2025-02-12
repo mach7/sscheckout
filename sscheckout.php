@@ -2,7 +2,7 @@
 /*
 Plugin Name: Simple Shopping Cart
 Description: A simple shopping cart plugin with Stripe checkout integration.
-Version: 1.1.0
+Version: 1.0.0
 Author: Tyson Brooks
 Author URI: https://frostlineworks.com
 Tested up to: 6.2
@@ -14,36 +14,36 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Ensure the FLW Plugin Library is loaded before running the plugin
-add_action('plugins_loaded', function () {
+add_action( 'plugins_loaded', function () {
 
 	// Check if the FLW Plugin Update Checker class exists
-	if ( class_exists('FLW_Plugin_Update_Checker') ) {
-		$pluginSlug = basename(dirname(__FILE__)); // Dynamically get the plugin slug
+	if ( class_exists( 'FLW_Plugin_Update_Checker' ) ) {
+		$pluginSlug = basename( dirname( __FILE__ ) ); // Dynamically get the plugin slug
 
 		// Initialize the update checker
-		FLW_Plugin_Update_Checker::initialize(__FILE__, $pluginSlug);
+		FLW_Plugin_Update_Checker::initialize( __FILE__, $pluginSlug );
 
 		// Replace the update icon
-		add_filter('site_transient_update_plugins', function ($transient) {
+		add_filter( 'site_transient_update_plugins', function ( $transient ) {
 			if ( isset( $transient->response ) ) {
 				foreach ( $transient->response as $plugin_slug => $plugin_data ) {
-					if ( $plugin_slug === plugin_basename(__FILE__) ) {
-						$icon_url = plugins_url('assets/logo-128x128.png', __FILE__);
-						$transient->response[$plugin_slug]->icons = [
+					if ( $plugin_slug === plugin_basename( __FILE__ ) ) {
+						$icon_url = plugins_url( 'assets/logo-128x128.png', __FILE__ );
+						$transient->response[ $plugin_slug ]->icons = [
 							'default' => $icon_url,
 							'1x'      => $icon_url,
-							'2x'      => plugins_url('assets/logo-256x256.png', __FILE__),
+							'2x'      => plugins_url( 'assets/logo-256x256.png', __FILE__ ),
 						];
 					}
 				}
 			}
 			return $transient;
-		});
+		} );
 	} else {
 		// Admin notice for missing FLW Plugin Library
-		add_action('admin_notices', function () {
+		add_action( 'admin_notices', function () {
 			$pluginSlug = 'flwpluginlibrary/flwpluginlibrary.php';
-			$plugins = get_plugins();
+			$plugins    = get_plugins();
 			if ( ! isset( $plugins[ $pluginSlug ] ) ) {
 				echo '<div class="notice notice-error"><p>The FLW Plugin Library is not installed. Please install and activate it to enable update functionality.</p></div>';
 			} elseif ( ! is_plugin_active( $pluginSlug ) ) {
@@ -53,11 +53,11 @@ add_action('plugins_loaded', function () {
 				);
 				echo '<div class="notice notice-error"><p>The FLW Plugin Library is installed but not active. Please <a href="' . esc_url( $activateUrl ) . '">activate</a> it to enable update functionality.</p></div>';
 			}
-		});
+		} );
 	}
 
 	// If the FLW Plugin Library is available, run the plugin code
-	if ( class_exists('FLW_Plugin_Library') ) {
+	if ( class_exists( 'FLW_Plugin_Library' ) ) {
 
 		class SimpleShoppingCart_Plugin {
 
@@ -65,8 +65,11 @@ add_action('plugins_loaded', function () {
 			 * Constructor – sets up hooks, shortcodes, AJAX and admin menu.
 			 */
 			public function __construct() {
-				// Activation hook to create custom database tables.
+				// Activation hook to create required tables.
 				register_activation_hook( __FILE__, [ __CLASS__, 'activate' ] );
+
+				// Check on every load if the tables exist.
+				add_action( 'init', [ $this, 'maybe_create_tables' ] );
 
 				// Register our shortcodes.
 				add_action( 'init', [ $this, 'register_shortcodes' ] );
@@ -94,7 +97,7 @@ add_action('plugins_loaded', function () {
 
 				// Table for shopping cart items.
 				$table1 = $wpdb->prefix . 'flw_shopping_cart';
-				$sql1 = "CREATE TABLE $table1 (
+				$sql1   = "CREATE TABLE $table1 (
 					id mediumint(9) NOT NULL AUTO_INCREMENT,
 					uid varchar(100) NOT NULL,
 					product_name varchar(255) NOT NULL,
@@ -106,7 +109,7 @@ add_action('plugins_loaded', function () {
 
 				// Table for order history.
 				$table2 = $wpdb->prefix . 'flw_order_history';
-				$sql2 = "CREATE TABLE $table2 (
+				$sql2   = "CREATE TABLE $table2 (
 					id mediumint(9) NOT NULL AUTO_INCREMENT,
 					uid varchar(100) NOT NULL,
 					order_id varchar(100) NOT NULL,
@@ -119,6 +122,47 @@ add_action('plugins_loaded', function () {
 
 				dbDelta( $sql1 );
 				dbDelta( $sql2 );
+			}
+
+			/**
+			 * Checks if the custom tables exist and creates them if they don't.
+			 */
+			public function maybe_create_tables() {
+				global $wpdb;
+				$table1 = $wpdb->prefix . 'flw_shopping_cart';
+				$table2 = $wpdb->prefix . 'flw_order_history';
+
+				$exists1 = $wpdb->get_var( $wpdb->prepare( "SHOW TABLES LIKE %s", $table1 ) );
+				$exists2 = $wpdb->get_var( $wpdb->prepare( "SHOW TABLES LIKE %s", $table2 ) );
+
+				if ( ! $exists1 || ! $exists2 ) {
+					require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+					$charset_collate = $wpdb->get_charset_collate();
+
+					$sql1 = "CREATE TABLE $table1 (
+						id mediumint(9) NOT NULL AUTO_INCREMENT,
+						uid varchar(100) NOT NULL,
+						product_name varchar(255) NOT NULL,
+						product_price decimal(10,2) NOT NULL,
+						quantity int NOT NULL DEFAULT 1,
+						added_at datetime DEFAULT CURRENT_TIMESTAMP,
+						PRIMARY KEY (id)
+					) $charset_collate;";
+
+					$sql2 = "CREATE TABLE $table2 (
+						id mediumint(9) NOT NULL AUTO_INCREMENT,
+						uid varchar(100) NOT NULL,
+						order_id varchar(100) NOT NULL,
+						product_name varchar(255) NOT NULL,
+						product_price decimal(10,2) NOT NULL,
+						quantity int NOT NULL DEFAULT 1,
+						purchased_at datetime DEFAULT CURRENT_TIMESTAMP,
+						PRIMARY KEY (id)
+					) $charset_collate;";
+
+					dbDelta( $sql1 );
+					dbDelta( $sql2 );
+				}
 			}
 
 			/**
@@ -182,6 +226,7 @@ add_action('plugins_loaded', function () {
 				$uid = $this->get_user_uid();
 				global $wpdb;
 				$table = $wpdb->prefix . 'flw_shopping_cart';
+
 				// Check if this product is already in the cart.
 				$existing = $wpdb->get_row(
 					$wpdb->prepare(
@@ -308,11 +353,11 @@ add_action('plugins_loaded', function () {
 					} else {
 						$price = isset( $_POST['price'] ) ? floatval( wp_unslash( $_POST['price'] ) ) : 0;
 						$wpdb->insert( $table, [
-							'uid'          => $uid,
-							'product_name' => $product,
-							'product_price'=> $price,
-							'quantity'     => 1,
-							'added_at'     => current_time( 'mysql' )
+							'uid'           => $uid,
+							'product_name'  => $product,
+							'product_price' => $price,
+							'quantity'      => 1,
+							'added_at'      => current_time( 'mysql' )
 						] );
 						wp_send_json_success( [ 'quantity' => 1 ] );
 					}
@@ -341,21 +386,21 @@ add_action('plugins_loaded', function () {
 			/**
 			 * AJAX handler to process checkout.
 			 *
-			 * This validates form data, calculates the total,
-			 * uses Stripe’s API (via cURL) to create a token and charge,
-			 * creates a WP user (if necessary), sends an order email,
+			 * Validates form data, calculates the total,
+			 * creates a Stripe card token and charge via cURL,
+			 * creates a WP user (if needed), sends an order email,
 			 * moves cart items to order history, and clears the cart.
 			 */
 			public function process_checkout() {
-				$name     = sanitize_text_field( wp_unslash( $_POST['name'] ) );
-				$email    = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
-				$password = isset( $_POST['password'] ) ? wp_unslash( $_POST['password'] ) : '';
-				$phone    = sanitize_text_field( wp_unslash( $_POST['phone'] ) );
-				$cc_number= sanitize_text_field( wp_unslash( $_POST['cc_number'] ) );
-				$cc_cvc   = sanitize_text_field( wp_unslash( $_POST['cc_cvc'] ) );
-				$cc_exp   = sanitize_text_field( wp_unslash( $_POST['cc_exp'] ) );
-				$cc_zip   = sanitize_text_field( wp_unslash( $_POST['cc_zip'] ) );
-				$uid      = $this->get_user_uid();
+				$name      = sanitize_text_field( wp_unslash( $_POST['name'] ) );
+				$email     = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
+				$password  = isset( $_POST['password'] ) ? wp_unslash( $_POST['password'] ) : '';
+				$phone     = sanitize_text_field( wp_unslash( $_POST['phone'] ) );
+				$cc_number = sanitize_text_field( wp_unslash( $_POST['cc_number'] ) );
+				$cc_cvc    = sanitize_text_field( wp_unslash( $_POST['cc_cvc'] ) );
+				$cc_exp    = sanitize_text_field( wp_unslash( $_POST['cc_exp'] ) );
+				$cc_zip    = sanitize_text_field( wp_unslash( $_POST['cc_zip'] ) );
+				$uid       = $this->get_user_uid();
 
 				global $wpdb;
 				$cart_table  = $wpdb->prefix . 'flw_shopping_cart';
@@ -367,7 +412,7 @@ add_action('plugins_loaded', function () {
 				}
 
 				// Calculate the total amount (assumes product_price is in dollars).
-				$total = 0;
+				$total  = 0;
 				foreach ( $items as $item ) {
 					$total += floatval( $item->product_price ) * intval( $item->quantity );
 				}
@@ -388,11 +433,11 @@ add_action('plugins_loaded', function () {
 				$exp_month = trim( $exp[0] );
 				$exp_year  = trim( $exp[1] );
 				$card_data = http_build_query( [
-					'card[number]'       => $cc_number,
-					'card[cvc]'          => $cc_cvc,
-					'card[exp_month]'    => $exp_month,
-					'card[exp_year]'     => $exp_year,
-					'card[address_zip]'  => $cc_zip,
+					'card[number]'      => $cc_number,
+					'card[cvc]'         => $cc_cvc,
+					'card[exp_month]'   => $exp_month,
+					'card[exp_year]'    => $exp_year,
+					'card[address_zip]' => $cc_zip,
 				] );
 				curl_setopt( $ch, CURLOPT_USERPWD, $stripe_secret . ':' );
 				curl_setopt( $ch, CURLOPT_POST, true );
@@ -452,12 +497,12 @@ add_action('plugins_loaded', function () {
 				// --- Move cart items to order history ---
 				foreach ( $items as $item ) {
 					$wpdb->insert( $order_table, [
-						'uid'          => $uid,
-						'order_id'     => $order_id,
-						'product_name' => $item->product_name,
-						'product_price'=> $item->product_price,
-						'quantity'     => $item->quantity,
-						'purchased_at' => current_time( 'mysql' )
+						'uid'           => $uid,
+						'order_id'      => $order_id,
+						'product_name'  => $item->product_name,
+						'product_price' => $item->product_price,
+						'quantity'      => $item->quantity,
+						'purchased_at'  => current_time( 'mysql' )
 					] );
 				}
 
@@ -504,8 +549,8 @@ add_action('plugins_loaded', function () {
 
 	} else {
 		// Show an admin notice if the FLW Plugin Library is not active.
-		add_action('admin_notices', function () {
+		add_action( 'admin_notices', function () {
 			echo '<div class="notice notice-error"><p>The FLW Plugin Library must be activated for Simple Shopping Cart to work.</p></div>';
-		});
+		} );
 	}
-});
+} );
