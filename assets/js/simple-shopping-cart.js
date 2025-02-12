@@ -1,4 +1,22 @@
-jQuery(document).ready(function ($) {
+jQuery(document).ready(function($) {
+    // Initialize the date/time picker on the pickup_time field.
+    if ($("#pickup_time").length) {
+        $("#pickup_time").datetimepicker({
+            dateFormat: "yy-mm-dd",
+            timeFormat: "HH:mm",
+            // Optionally, disable closed days (pass these values via wp_localize_script)
+            beforeShowDay: function(date) {
+                // Example: disable weekends (Saturday=6, Sunday=0)
+                var day = date.getDay();
+                // If you have a global array of closed days from PHP (e.g., [6,0]), you can disable them.
+                var closedDays = sscGlobalSettings.closedDays || [];
+                if ( $.inArray(day, closedDays) !== -1 ) {
+                    return [false, "", "Closed"];
+                }
+                return [true, ""];
+            }
+        });
+    }
     // If #card-element exists, initialize Stripe elements for the checkout form.
     var cardElementDiv = document.getElementById('card-element');
     if (cardElementDiv) {
