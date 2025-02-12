@@ -190,23 +190,28 @@ add_action( 'plugins_loaded', function () {
 					plugins_url( 'assets/css/simple-shopping-cart.css', __FILE__ )
 				);
 			}
+            // Place this early in your plugin file (before any output)
+            add_action( 'init', function() {
+                if ( ! is_user_logged_in() && ! isset( $_COOKIE['ssc_uid'] ) ) {
+                    $uid = 'guest_' . wp_generate_uuid4();
+                    setcookie( 'ssc_uid', $uid, time() + ( 3600 * 24 * 30 ), COOKIEPATH, COOKIE_DOMAIN );
+                }
+            } );
 
 			/**
 			 * Returns a unique identifier for the current user.
 			 */
 			public function get_user_uid() {
-				if ( is_user_logged_in() ) {
-					return 'user_' . get_current_user_id();
-				} else {
-					if ( isset( $_COOKIE['ssc_uid'] ) ) {
-						return sanitize_text_field( wp_unslash( $_COOKIE['ssc_uid'] ) );
-					} else {
-						$uid = 'guest_' . wp_generate_uuid4();
-						setcookie( 'ssc_uid', $uid, time() + ( 3600 * 24 * 30 ), COOKIEPATH, COOKIE_DOMAIN );
-						return $uid;
-					}
-				}
-			}
+                if ( is_user_logged_in() ) {
+                    return 'user_' . get_current_user_id();
+                }
+                if ( isset( $_COOKIE['ssc_uid'] ) ) {
+                    return sanitize_text_field( wp_unslash( $_COOKIE['ssc_uid'] ) );
+                }
+                // Fallback if for some reason the cookie isn't set (should rarely happen)
+                return 'guest_' . wp_generate_uuid4();
+            }
+            
 
 			/**
 			 * Renders the [add_to_cart] shortcode.
