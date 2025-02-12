@@ -149,18 +149,18 @@ class SSC_Cart {
 add_action( 'wp_ajax_ssc_update_cart', ['SSC_Cart', 'handle_cart_update'] );
 add_action( 'wp_ajax_nopriv_ssc_update_cart', ['SSC_Cart', 'handle_cart_update'] );
 
-add_action('wp_ajax_ssc_load_cart', ['SSC_Cart', 'load_cart']);
-add_action('wp_ajax_nopriv_ssc_load_cart', ['SSC_Cart', 'load_cart']);
-
+//add_action('wp_ajax_ssc_load_cart', ['SSC_Cart', 'load_cart']);
+//add_action('wp_ajax_nopriv_ssc_load_cart', ['SSC_Cart', 'load_cart']);
 function ssc_load_cart() {
     $user_id   = SSC_Cart::get_user_id();
-    $cart_html = SSC_Cart::get_cart_items_html( $user_id );
-    $cart_total = SSC_Cart::get_cart_total( $user_id );
+    $cart_html = SSC_Cart::get_cart_items_html($user_id);
+    $cart_total = SSC_Cart::get_cart_total($user_id);
 
-    wp_send_json_success( [
+    wp_send_json_success([
         'cart_html'  => $cart_html,
-        'cart_total' => number_format( $cart_total / 100, 2 ),
-    ] );
+        'cart_total' => number_format($cart_total / 100, 2),
+    ]);
 }
-add_action( 'wp_ajax_ssc_load_cart', 'ssc_load_cart' );
-add_action( 'wp_ajax_nopriv_ssc_load_cart', 'ssc_load_cart' );
+add_action('wp_ajax_ssc_load_cart', 'ssc_load_cart');
+add_action('wp_ajax_nopriv_ssc_load_cart', 'ssc_load_cart');
+
