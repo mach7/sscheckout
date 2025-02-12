@@ -215,27 +215,28 @@ add_action('plugins_loaded', function () {
 			 * Enqueues front-end JavaScript and CSS.
 			 */
 			public function enqueue_scripts() {
-                // Only load Stripe scripts on the checkout page.
+                // Always load Stripe.js.
                 wp_enqueue_script( 'stripe-js', 'https://js.stripe.com/v3/', array(), null, true );
-                if ( is_page( 'checkout' ) ) {
-
-                    wp_enqueue_script(
-                        'simple-shopping-cart',
-                        plugins_url( 'assets/js/simple-shopping-cart.js', __FILE__ ),
-                        [ 'jquery' ],
-                        '1.0.0',
-                        true
-                    );
-                    wp_localize_script( 'simple-shopping-cart', 'sscheckout_params', [
-                        'ajax_url' => admin_url( 'admin-ajax.php' ),
-                        'publishableKey' => get_option( 'flw_stripe_public_key' ) // ensure your publishable key is passed
-                    ] );
-                    wp_enqueue_style(
-                        'simple-shopping-cart',
-                        plugins_url( 'assets/css/simple-shopping-cart.css', __FILE__ )
-                    );
-                }
+                
+                // Enqueue our main JS file on all pages.
+                wp_enqueue_script(
+                    'simple-shopping-cart',
+                    plugins_url( 'assets/js/simple-shopping-cart.js', __FILE__ ),
+                    [ 'jquery' ],
+                    '1.1.7.2', // update version if needed
+                    true
+                );
+                wp_localize_script( 'simple-shopping-cart', 'sscheckout_params', [
+                    'ajax_url'       => admin_url( 'admin-ajax.php' ),
+                    'publishableKey' => get_option( 'flw_stripe_public_key' )
+                ] );
+                // Enqueue CSS on all pages.
+                wp_enqueue_style(
+                    'simple-shopping-cart',
+                    plugins_url( 'assets/css/simple-shopping-cart.css', __FILE__ )
+                );
             }
+            
             
 
 			/**
