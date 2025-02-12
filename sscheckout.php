@@ -415,56 +415,64 @@ add_action('plugins_loaded', function () {
 			 * AJAX handler to process checkout.
 			 */
 			public function process_checkout() {
-				$name           = sanitize_text_field( wp_unslash( $_POST['name'] ) );
-				$email          = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
-				$password       = isset( $_POST['password'] ) ? wp_unslash( $_POST['password'] ) : '';
-				$phone          = sanitize_text_field( wp_unslash( $_POST['phone'] ) );
-				$paymentMethod  = sanitize_text_field( wp_unslash( $_POST['paymentMethod'] ) );
-				$uid            = $this->get_user_uid();
+                $name          = sanitize_text_field( wp_unslash( $_POST['name'] ) );
+                $email         = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
+                $password      = isset( $_POST['password'] ) ? wp_unslash( $_POST['password'] ) : '';
+                $phone         = sanitize_text_field( wp_unslash( $_POST['phone'] ) );
+                $paymentMethod = sanitize_text_field( wp_unslash( $_POST['paymentMethod'] ) );
+                $uid           = $this->get_user_uid();
+            
+                global $wpdb;
+                $cart_table  = $wpdb->prefix . 'flw_shopping_cart';
+                $order_table = $wpdb->prefix . 'flw_order_history';
+                $items       = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $cart_table WHERE uid = %s", $uid ) );
+            
+                if ( ! $items ) {
+                    wp_send_json_error( 'Cart is empty' );
+                }
+            
+                // Calculate total amount in cents.
+                $total  = 0;
+                foreach ( $items as $item ) {
+                    $total += floatval( $item->product_price ) * intval( $item->quantity );
+                }
+                $amount = intval( $total * 100 );
+            
+                $stripe_secret = get_option( 'flw_stripe_secret_key' );
+                if ( ! $stripe_secret ) {
+                    wp_send_json_error( 'Stripe secret key not found' );
+                }
+            
+                // Generate a unique order ID.
+                $order_id = 'ORDER-' . time();
 
-				global $wpdb;
-				$cart_table  = $wpdb->prefix . 'flw_shopping_cart';
-				$order_table = $wpdb->prefix . 'flw_order_history';
-				$items       = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $cart_table WHERE uid = %s", $uid ) );
+				// --- Create and confirm a PaymentIntent via Stripe API using the PaymentMethod ---
+                $ch = curl_init( 'https://api.stripe.com/v1/payment_intents' );
 
-				if ( ! $items ) {
-					wp_send_json_error( 'Cart is empty' );
-				}
+                // Prepare the data for the PaymentIntent. 
+                // Note: We're using the Payment Methods API, so we pass 'payment_method' instead of 'source'
+                $intent_data = http_build_query( [
+                    'amount'              => $amount,
+                    'currency'            => 'usd',
+                    'payment_method'      => $paymentMethod,
+                    'confirmation_method' => 'automatic', // let Stripe automatically handle confirmation
+                    'confirm'             => 'true',
+                    'description'         => 'Charge for ' . $name,
+                    'metadata[order_id]'  => $order_id,
+                ] );
 
-				// Calculate total amount in cents.
-				$total  = 0;
-				foreach ( $items as $item ) {
-					$total += floatval( $item->product_price ) * intval( $item->quantity );
-				}
-				$amount = intval( $total * 100 );
+                curl_setopt( $ch, CURLOPT_USERPWD, $stripe_secret . ':' );
+                curl_setopt( $ch, CURLOPT_POST, true );
+                curl_setopt( $ch, CURLOPT_POSTFIELDS, $intent_data );
+                curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
+                $intent_response = curl_exec( $ch );
+                $intent_result   = json_decode( $intent_response, true );
+                curl_close( $ch );
 
-				$stripe_secret = get_option( 'flw_stripe_secret_key' );
-				if ( ! $stripe_secret ) {
-					wp_send_json_error( 'Stripe secret key not found' );
-				}
+                if ( isset( $intent_result['error'] ) ) {
+                    wp_send_json_error( 'Stripe PaymentIntent error: ' . $intent_result['error']['message'] );
+                }
 
-				// Generate a unique order ID.
-				$order_id = 'ORDER-' . time();
-
-				// Create a charge via Stripe API.
-				$ch = curl_init( 'https://api.stripe.com/v1/charges' );
-				$charge_data = http_build_query( [
-					'amount'      => $amount,
-					'currency'    => 'usd',
-					'source'      => $paymentMethod,
-					'description' => 'Charge for ' . $name,
-					'metadata[order_id]' => $order_id,
-				] );
-				curl_setopt( $ch, CURLOPT_USERPWD, $stripe_secret . ':' );
-				curl_setopt( $ch, CURLOPT_POST, true );
-				curl_setopt( $ch, CURLOPT_POSTFIELDS, $charge_data );
-				curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
-				$charge_response = curl_exec( $ch );
-				$charge_result   = json_decode( $charge_response, true );
-				curl_close( $ch );
-				if ( isset( $charge_result['error'] ) ) {
-					wp_send_json_error( 'Stripe charge error: ' . $charge_result['error']['message'] );
-				}
 
 				// Create a new WP user if not logged in.
 				if ( ! is_user_logged_in() ) {
