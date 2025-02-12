@@ -2,7 +2,7 @@
 /*
 Plugin Name: Simple Shopping Cart
 Description: A simple shopping cart plugin with Stripe checkout integration.
-Version: 1.1.4
+Version: 1.1.5
 Author: Tyson Brooks
 Author URI: https://frostlineworks.com
 Tested up to: 6.2
