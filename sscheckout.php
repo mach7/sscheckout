@@ -511,7 +511,7 @@ add_action('plugins_loaded', function () {
                 }
 
                 // Validate against allowed time blocks (if set) for the selected pickup type.
-                $day_of_week = $pickup_datetime->format( 'N' );
+                $day_of_week = $pickup_datetime->format( 'D' );
                 if ( isset( $allowed_time_blocks[ $day_of_week ] ) && is_array( $allowed_time_blocks[ $day_of_week ] ) ) {
                     $is_valid_time = false;
                     foreach ( $allowed_time_blocks[ $day_of_week ] as $time_range ) {
