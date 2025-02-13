@@ -13,6 +13,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+function enqueue_datepicker_assets() {
+    wp_enqueue_script( 'jquery-ui-datepicker' );
+    wp_enqueue_style( 'jquery-ui-css', 'https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css' );
+}
+add_action( 'wp_enqueue_scripts', 'enqueue_datepicker_assets' );
+
 // Ensure the FLW Plugin Library is loaded before running the plugin.
 add_action('plugins_loaded', function () {
 
@@ -210,11 +216,7 @@ add_action('plugins_loaded', function () {
 				add_shortcode( 'add_to_cart', [ $this, 'add_to_cart_shortcode' ] );
 				add_shortcode( 'checkout', [ $this, 'checkout_shortcode' ] );
 			}
-            function enqueue_datepicker_assets() {
-                wp_enqueue_script( 'jquery-ui-datepicker' );
-                wp_enqueue_style( 'jquery-ui-css', 'https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css' );
-            }
-            add_action( 'wp_enqueue_scripts', 'enqueue_datepicker_assets' );
+            
             
 
 			/**
