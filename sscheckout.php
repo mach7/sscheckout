@@ -323,8 +323,8 @@ add_action('plugins_loaded', function () {
                                 <tr>
                                     <th>Product</th>
                                     <th>Price</th>
-                                    <th>Quantity</th>
-                                    <th>Actions</th>
+                                    <th class="qualityCol">Quantity</th>
+                                    <th class="actionsCol">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>

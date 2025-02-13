@@ -1,3 +1,6 @@
+.qualityCol, .actionsCol {
+	width:200px;
+}
 .ss-checkout {
     max-width: 600px;
     margin: 20px auto;
