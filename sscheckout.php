@@ -314,36 +314,36 @@ add_action('plugins_loaded', function () {
                 $table = $wpdb->prefix . 'flw_shopping_cart';
                 $items = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $table WHERE uid = %s", $uid ) );
             
-                // Retrieve pickup types from settings.
-                $pickup_types = maybe_unserialize( get_option( 'ssc_pickup_types', [] ) );
+                // Retrieve and decode pickup types from settings.
+                $pickup_types = json_decode( get_option( 'ssc_pickup_types', '[]' ), true );
                 ?>
                 <div class="ssc-checkout">
                     <h2>Your Cart</h2>
                     <?php if ( $items ) : ?>
                         <table class="ssc-cart-table">
-							<thead>
-								<tr>
-									<th>Product</th>
-									<th>Price</th>
-									<th>Quantity</th>
-									<th>Actions</th>
-								</tr>
-							</thead>
-							<tbody>
-								<?php foreach ( $items as $item ) : ?>
-									<tr data-product="<?php echo esc_attr( $item->product_name ); ?>">
-										<td><?php echo esc_html( $item->product_name ); ?></td>
-										<td><?php echo esc_html( $item->product_price ); ?></td>
-										<td class="ssc-item-quantity"><?php echo intval( $item->quantity ); ?></td>
-										<td>
-											<button class="ssc-minus" data-action="minus">–</button>
-											<button class="ssc-plus" data-action="plus">+</button>
-											<button class="ssc-remove" data-action="remove">🗑️</button>
-										</td>
-									</tr>
-								<?php endforeach; ?>
-							</tbody>
-						</table>
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Price</th>
+                                    <th>Quantity</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ( $items as $item ) : ?>
+                                    <tr data-product="<?php echo esc_attr( $item->product_name ); ?>">
+                                        <td><?php echo esc_html( $item->product_name ); ?></td>
+                                        <td><?php echo esc_html( $item->product_price ); ?></td>
+                                        <td class="ssc-item-quantity"><?php echo intval( $item->quantity ); ?></td>
+                                        <td>
+                                            <button class="ssc-minus" data-action="minus">–</button>
+                                            <button class="ssc-plus" data-action="plus">+</button>
+                                            <button class="ssc-remove" data-action="remove">🗑️</button>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
                     <?php else : ?>
                         <p>Your cart is empty.</p>
                     <?php endif; ?>
@@ -386,7 +386,8 @@ add_action('plugins_loaded', function () {
                 </div>
                 <?php
                 return ob_get_clean();
-            }            
+            }
+            
 
 			/**
 			 * AJAX handler for updating the shopping cart.
