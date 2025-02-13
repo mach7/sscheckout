@@ -84,19 +84,20 @@ jQuery(document).ready(function($) {
     }
     
     /***** Client-Side Pickup Time Validation *****/
-    // Only add pickup time validation if pickup is enabled.
+    // Only add pickup time validation if pickup options are enabled.
     if (sscheckout_params.enable_pickup) {
         // Listen for changes on the pickup time field.
         $("#pickup_time").on("change", function() {
-            // Expected format from a datetime-local input: "YYYY-MM-DDTHH:mm"
-            var pickupTimeStr = $(this).val();
+            var pickupTimeStr = $(this).val(); // Expected format: "YYYY-MM-DDTHH:mm" from datetime-local input
             var pickupDate = new Date(pickupTimeStr);
             if (isNaN(pickupDate)) {
                 $("#pickup-time-error").text("Invalid date/time selected.");
+                $("#ss-checkout-form button[type='submit']").prop("disabled", true);
                 return;
             }
+            
             var now = new Date();
-            // Get the selected pickup type.
+            // Get the selected pickup type
             var pickupTypeName = $("#pickup_type").val();
             var pickupType = null;
             if (sscheckout_params.pickup_types && Array.isArray(sscheckout_params.pickup_types)) {
@@ -109,38 +110,41 @@ jQuery(document).ready(function($) {
             }
             if (!pickupType) {
                 $("#pickup-time-error").text("Invalid pickup type.");
+                $("#ss-checkout-form button[type='submit']").prop("disabled", true);
                 return;
             }
-            // Validate minimum lead time (in hours).
+            // Validate minimum lead time (in hours)
             var minLeadTime = pickupType.min_lead_time; // in hours
             var minAllowedTime = new Date(now.getTime() + minLeadTime * 60 * 60 * 1000);
             if (pickupDate < minAllowedTime) {
                 $("#pickup-time-error").text("Pickup time must be at least " + minLeadTime + " hours from now.");
+                $("#ss-checkout-form button[type='submit']").prop("disabled", true);
                 return;
             }
             // Validate global restrictions.
-            // JavaScript Date.getDay() returns 0 for Sunday, 1 for Monday, etc.
-            // Convert so Monday=1, Sunday=7.
+            // JavaScript Date.getDay() returns 0 for Sunday, 1 for Monday, ... 6 for Saturday.
+            // Convert so that Monday=1, Sunday=7.
             var dayNum = pickupDate.getDay();
             if (dayNum === 0) { dayNum = 7; }
             var closedDays = sscheckout_params.global_restrictions.closed_days || [];
             if (closedDays.indexOf(dayNum) !== -1) {
                 $("#pickup-time-error").text("The selected day is closed for orders.");
+                $("#ss-checkout-form button[type='submit']").prop("disabled", true);
                 return;
             }
-            // Validate allowed time blocks for the selected pickup type.
+            // Validate against allowed time blocks for the selected pickup type.
             // Our pickup type's time_blocks use 3-letter abbreviations: Mon, Tue, Wed, etc.
             var dayAbbr = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
             var dayStr = dayAbbr[dayNum - 1];
             var allowedBlocks = pickupType.time_blocks[dayStr];
             if (allowedBlocks && allowedBlocks.length > 0) {
-                // Get the time portion in HH:mm format.
+                // Extract the time portion in HH:mm format.
                 var hours = pickupDate.getHours();
                 var minutes = pickupDate.getMinutes();
-                var timeStr = ('0' + hours).slice(-2) + ":" + ('0' + minutes).slice(-2);
+                var timeStr = ('0' + hours).slice(-2) + ':' + ('0' + minutes).slice(-2);
                 var valid = false;
                 for (var j = 0; j < allowedBlocks.length; j++) {
-                    var range = allowedBlocks[j].split("-");
+                    var range = allowedBlocks[j].split('-'); // Expected format: "HH:MM-HH:MM"
                     if (timeStr >= range[0] && timeStr <= range[1]) {
                         valid = true;
                         break;
@@ -148,12 +152,13 @@ jQuery(document).ready(function($) {
                 }
                 if (!valid) {
                     $("#pickup-time-error").text(pickupType.name + " orders can only be picked up during designated hours. Please choose a different pickup time.");
-                    
+                    $("#ss-checkout-form button[type='submit']").prop("disabled", true);
                     return;
                 }
             }
-            // If all checks pass, clear any error message.
+            // If all checks pass, clear any error message and enable the submit button.
             $("#pickup-time-error").text("");
+            $("#ss-checkout-form button[type='submit']").prop("disabled", false);
         });
     }
     
