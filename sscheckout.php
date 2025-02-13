@@ -2,7 +2,7 @@
 /*
 Plugin Name: Simple Shopping Cart
 Description: A simple shopping cart plugin with Stripe checkout integration.
-Version: 1.2.0
+Version: 1.2.5
 Author: Tyson Brooks
 Author URI: https://frostlineworks.com
 Tested up to: 6.2
@@ -216,8 +216,6 @@ add_action('plugins_loaded', function () {
 				add_shortcode( 'add_to_cart', [ $this, 'add_to_cart_shortcode' ] );
 				add_shortcode( 'checkout', [ $this, 'checkout_shortcode' ] );
 			}
-            
-            
 
 			/**
 			 * Enqueues front-end JavaScript and CSS.
@@ -244,8 +242,6 @@ add_action('plugins_loaded', function () {
                     plugins_url( 'assets/css/simple-shopping-cart.css', __FILE__ )
                 );
             }
-            
-            
 
 			/**
 			 * Returns a unique identifier for the current user.
@@ -316,6 +312,8 @@ add_action('plugins_loaded', function () {
             
                 // Retrieve and decode pickup types from settings.
                 $pickup_types = json_decode( get_option( 'ssc_pickup_types', '[]' ), true );
+                // Check if pickup options are enabled (default to enabled).
+                $enable_pickup = get_option( 'ssc_enable_pickup_options', 1 );
                 ?>
                 <div class="ssc-checkout">
                     <h2>Your Cart</h2>
@@ -357,24 +355,25 @@ add_action('plugins_loaded', function () {
                         <?php endif; ?>
                         <label>Phone: <input type="text" name="phone"></label><br>
             
-                        <!-- New Pickup Options Section -->
-                        <h3>Pickup Options</h3>
-                        <label for="pickup_type">Pickup Type:</label>
-                        <select name="pickup_type" id="pickup_type" required>
-                            <?php 
-                            if ( ! empty( $pickup_types ) && is_array( $pickup_types ) ) {
-                                foreach ( $pickup_types as $type ) {
-                                    echo '<option value="' . esc_attr( $type['name'] ) . '">' . esc_html( $type['name'] ) . '</option>';
+                        <?php if ( $enable_pickup ) : // Only display pickup options if enabled ?>
+                            <h3>Pickup Options</h3>
+                            <label for="pickup_type">Pickup Type:</label>
+                            <select name="pickup_type" id="pickup_type" required>
+                                <?php 
+                                if ( ! empty( $pickup_types ) && is_array( $pickup_types ) ) {
+                                    foreach ( $pickup_types as $type ) {
+                                        echo '<option value="' . esc_attr( $type['name'] ) . '">' . esc_html( $type['name'] ) . '</option>';
+                                    }
+                                } else {
+                                    echo '<option value="">No pickup types configured</option>';
                                 }
-                            } else {
-                                echo '<option value="">No pickup types configured</option>';
-                            }
-                            ?>
-                        </select>
-                        <br>
-                        <label for="pickup_time">Pickup Time:</label>
-                        <input type="time" name="pickup_time" id="pickup_time" placeholder="Select pickup time" required>
-                        <br><br>
+                                ?>
+                            </select>
+                            <br>
+                            <label for="pickup_time">Pickup Time:</label>
+                            <input type="time" name="pickup_time" id="pickup_time" placeholder="Select pickup time" required>
+                            <br><br>
+                        <?php endif; ?>
             
                         <h3>Payment Details</h3>
                         <div id="card-element"><!-- Stripe Element will be inserted here --></div>
@@ -386,8 +385,7 @@ add_action('plugins_loaded', function () {
                 </div>
                 <?php
                 return ob_get_clean();
-            }
-            
+			}
 
 			/**
 			 * AJAX handler for updating the shopping cart.
@@ -442,9 +440,9 @@ add_action('plugins_loaded', function () {
 			}
 
 			/**
-             * AJAX handler to process checkout.
-             */
-            public function process_checkout() {
+			 * AJAX handler to process checkout.
+			 */
+			public function process_checkout() {
                 // Sanitize and retrieve form input.
                 $name          = sanitize_text_field( wp_unslash( $_POST['name'] ) );
                 $email         = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
@@ -512,7 +510,7 @@ add_action('plugins_loaded', function () {
                 }
 
                 // Validate against allowed time blocks (if set) for the selected pickup type.
-                $day_of_week = $pickup_datetime->format( 'D' );
+                $day_of_week = $pickup_datetime->format( 'D' ); // Using 3-letter abbreviation
                 if ( isset( $allowed_time_blocks[ $day_of_week ] ) && is_array( $allowed_time_blocks[ $day_of_week ] ) ) {
                     $is_valid_time = false;
                     foreach ( $allowed_time_blocks[ $day_of_week ] as $time_range ) {
@@ -620,7 +618,6 @@ add_action('plugins_loaded', function () {
 
                 wp_send_json_success( 'Payment successful and order processed. Order Number: ' . $order_id );
             }
-
 
 			/**
 			 * Renders the Stripe Transactions admin page.
@@ -781,6 +778,10 @@ add_action('plugins_loaded', function () {
                         update_option( 'ssc_pickup_types', maybe_serialize( wp_unslash( $_POST['ssc_pickup_types'] ) ) );
                     }
                     
+                    // Process the pickup options toggle.
+                    $enable_pickup = isset( $_POST['ssc_enable_pickup_options'] ) ? 1 : 0;
+                    update_option( 'ssc_enable_pickup_options', $enable_pickup );
+                    
                     echo '<div class="updated"><p>Settings saved.</p></div>';
                 }
                 
@@ -823,6 +824,14 @@ add_action('plugins_loaded', function () {
                                 </td>
                             </tr>
                         </table>
+                        <hr>
+                        <h2>General Checkout Settings</h2>
+                        <p>
+                            <label>
+                                <input type="checkbox" name="ssc_enable_pickup_options" value="1" <?php checked( get_option('ssc_enable_pickup_options', 1), 1 ); ?>>
+                                Enable Pickup Options on Checkout
+                            </label>
+                        </p>
                         <hr>
                         <h2>Store Hours</h2>
                         <p>
@@ -869,30 +878,26 @@ add_action('plugins_loaded', function () {
                             For example:
                         </p>
                         <pre>
-            [{
-                "name": "Bakery Orders",
-                "min_lead_time": 24,
-                "time_blocks": {
-                    "1": ["09:00-12:00", "13:00-16:00"],
-                    "2": ["09:00-12:00", "13:00-16:00"],
-                    "3": ["09:00-12:00", "13:00-16:00"],
-                    "4": ["09:00-12:00", "13:00-16:00"],
-                    "5": ["09:00-12:00", "13:00-16:00"],
-                    "6": ["10:00-14:00"],
-                    "7": []
-                }
-            }]
+[{
+    "name": "Bakery Orders",
+    "min_lead_time": 24,
+    "time_blocks": {
+        "1": ["09:00-12:00", "13:00-16:00"],
+        "2": ["09:00-12:00", "13:00-16:00"],
+        "3": ["09:00-12:00", "13:00-16:00"],
+        "4": ["09:00-12:00", "13:00-16:00"],
+        "5": ["09:00-12:00", "13:00-16:00"],
+        "6": ["10:00-14:00"],
+        "7": []
+    }
+}]
                         </pre>
                         <textarea name="ssc_pickup_types" rows="8" cols="50" placeholder='Enter pickup types as JSON...'><?php echo esc_textarea( $pickup_types_pretty ); ?></textarea>
                         <?php submit_button( 'Save Settings', 'primary', 'ssc_save_settings' ); ?>
                     </form>
                 </div>
                 <?php
-            }
-            
-            
-                                    
-            
+			}
 		}
 
 		// Initialize the plugin.
