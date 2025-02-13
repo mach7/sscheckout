@@ -440,17 +440,31 @@ add_action('plugins_loaded', function () {
 			}
 
 			/**
-			 * AJAX handler to process checkout.
-			 */
-			public function process_checkout() {
+             * AJAX handler to process checkout.
+             */
+            public function process_checkout() {
                 // Sanitize and retrieve form input.
                 $name          = sanitize_text_field( wp_unslash( $_POST['name'] ) );
                 $email         = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
                 $password      = isset( $_POST['password'] ) ? wp_unslash( $_POST['password'] ) : '';
                 $phone         = sanitize_text_field( wp_unslash( $_POST['phone'] ) );
                 $paymentMethod = sanitize_text_field( wp_unslash( $_POST['paymentMethod'] ) );
-                $pickup_type   = sanitize_text_field( wp_unslash( $_POST['pickup_type'] ) );
-                $pickup_time   = sanitize_text_field( wp_unslash( $_POST['pickup_time'] ) );
+
+                // Check if pickup options are enabled.
+                $enable_pickup = get_option( 'ssc_enable_pickup_options', 1 );
+                if ( $enable_pickup ) {
+                    $pickup_type = sanitize_text_field( wp_unslash( $_POST['pickup_type'] ) );
+                    $pickup_time = sanitize_text_field( wp_unslash( $_POST['pickup_time'] ) );
+                    // Validate pickup time if pickup options are enabled.
+                    $pickup_datetime = DateTime::createFromFormat( 'Y-m-d H:i', $pickup_time );
+                    if ( ! $pickup_datetime ) {
+                        wp_send_json_error( 'Invalid pickup time format. Please use the provided date picker.' );
+                    }
+                } else {
+                    // If pickup is disabled, set empty values.
+                    $pickup_type = '';
+                    $pickup_time = '';
+                }
 
                 // Get the unique identifier for the current user.
                 $uid = $this->get_user_uid();
@@ -469,61 +483,58 @@ add_action('plugins_loaded', function () {
                     wp_send_json_error( 'Online orders are currently disabled.' );
                 }
 
-                // Retrieve global scheduling restrictions.
-                $closed_days       = array_map( 'intval', (array) get_option( 'ssc_closed_days', [] ) );
-                $after_hours_start = get_option( 'ssc_after_hours_start', '18:00' );
-                $after_hours_end   = get_option( 'ssc_after_hours_end', '08:00' );
+                if ( $enable_pickup ) {
+                    // Retrieve global scheduling restrictions.
+                    $closed_days       = array_map( 'intval', (array) get_option( 'ssc_closed_days', [] ) );
+                    $after_hours_start = get_option( 'ssc_after_hours_start', '18:00' );
+                    $after_hours_end   = get_option( 'ssc_after_hours_end', '08:00' );
 
-                // --- Validate Pickup Time ---
-                // Expecting format "Y-m-d H:i" (e.g., "2025-02-15 14:30")
-                $pickup_datetime = DateTime::createFromFormat( 'Y-m-d H:i', $pickup_time );
-                if ( ! $pickup_datetime ) {
-                    wp_send_json_error( 'Invalid pickup time format. Please use the provided date picker.' );
-                }
-                // Check if the selected day is closed.
-                // DateTime::format('N') returns 1 (Mon) to 7 (Sun)
-                if ( in_array( intval( $pickup_datetime->format( 'N' ) ), $closed_days, true ) ) {
-                    wp_send_json_error( 'The selected day is closed for orders.' );
-                }
+                    // Check if the selected day is closed.
+                    // DateTime::format('N') returns 1 (Mon) to 7 (Sun)
+                    if ( in_array( intval( $pickup_datetime->format( 'N' ) ), $closed_days, true ) ) {
+                        wp_send_json_error( 'The selected day is closed for orders.' );
+                    }
 
-                // Retrieve pickup type settings.
-                $pickup_types = maybe_unserialize( get_option( 'ssc_pickup_types', [] ) );
-                $min_lead_time_hours = 0;
-                $allowed_time_blocks = [];
+                    // Retrieve pickup type settings.
+                    $pickup_types = maybe_unserialize( get_option( 'ssc_pickup_types', [] ) );
+                    $min_lead_time_hours = 0;
+                    $allowed_time_blocks = [];
 
-                if ( is_array( $pickup_types ) ) {
-                    foreach ( $pickup_types as $type ) {
-                        if ( isset( $type['name'] ) && $type['name'] === $pickup_type ) {
-                            $min_lead_time_hours = isset( $type['min_lead_time'] ) ? intval( $type['min_lead_time'] ) : 0;
-                            $allowed_time_blocks = isset( $type['time_blocks'] ) ? (array) $type['time_blocks'] : [];
-                            break;
+                    if ( is_array( $pickup_types ) ) {
+                        foreach ( $pickup_types as $type ) {
+                            if ( isset( $type['name'] ) && $type['name'] === $pickup_type ) {
+                                $min_lead_time_hours = isset( $type['min_lead_time'] ) ? intval( $type['min_lead_time'] ) : 0;
+                                $allowed_time_blocks = isset( $type['time_blocks'] ) ? (array) $type['time_blocks'] : [];
+                                break;
+                            }
                         }
                     }
-                }
 
-                // Enforce minimum lead time.
-                $current_time      = new DateTime();
-                $min_allowed_time  = clone $current_time;
-                $min_allowed_time->add( new DateInterval( 'PT' . $min_lead_time_hours . 'H' ) );
-                if ( $pickup_datetime < $min_allowed_time ) {
-                    wp_send_json_error( 'Pickup time must be at least ' . $min_lead_time_hours . ' hours from now.' );
-                }
-
-                // Validate against allowed time blocks (if set) for the selected pickup type.
-                $day_of_week = $pickup_datetime->format( 'D' ); // Using 3-letter abbreviation
-                if ( isset( $allowed_time_blocks[ $day_of_week ] ) && is_array( $allowed_time_blocks[ $day_of_week ] ) ) {
-                    $is_valid_time = false;
-                    foreach ( $allowed_time_blocks[ $day_of_week ] as $time_range ) {
-                        // Expect time_range to be in "HH:MM-HH:MM" format.
-                        list( $start, $end ) = explode( '-', $time_range );
-                        $pickup_time_only = $pickup_datetime->format( 'H:i' );
-                        if ( $pickup_time_only >= $start && $pickup_time_only <= $end ) {
-                            $is_valid_time = true;
-                            break;
-                        }
+                    // Enforce minimum lead time.
+                    $current_time     = new DateTime();
+                    $min_allowed_time = clone $current_time;
+                    $min_allowed_time->add( new DateInterval( 'PT' . $min_lead_time_hours . 'H' ) );
+                    if ( $pickup_datetime < $min_allowed_time ) {
+                        wp_send_json_error( 'Pickup time must be at least ' . $min_lead_time_hours . ' hours from now.' );
                     }
-                    if ( ! $is_valid_time ) {
-                        wp_send_json_error( 'The selected pickup time is outside the allowed time blocks for ' . esc_html( $pickup_type ) . '.' );
+
+                    // Validate against allowed time blocks (if set) for the selected pickup type.
+                    // Using 3-letter day abbreviation (e.g., Mon, Tue, etc.)
+                    $day_of_week = $pickup_datetime->format( 'D' );
+                    if ( isset( $allowed_time_blocks[ $day_of_week ] ) && is_array( $allowed_time_blocks[ $day_of_week ] ) ) {
+                        $is_valid_time = false;
+                        foreach ( $allowed_time_blocks[ $day_of_week ] as $time_range ) {
+                            // Expect time_range to be in "HH:MM-HH:MM" format.
+                            list( $start, $end ) = explode( '-', $time_range );
+                            $pickup_time_only = $pickup_datetime->format( 'H:i' );
+                            if ( $pickup_time_only >= $start && $pickup_time_only <= $end ) {
+                                $is_valid_time = true;
+                                break;
+                            }
+                        }
+                        if ( ! $is_valid_time ) {
+                            wp_send_json_error( 'The selected pickup time is outside the allowed time blocks for ' . esc_html( $pickup_type ) . '.' );
+                        }
                     }
                 }
 
@@ -593,8 +604,10 @@ add_action('plugins_loaded', function () {
                 if ( ! empty( $phone ) ) {
                     $message .= "Phone: " . $phone . "\n";
                 }
-                $message .= "Pickup Type: " . $pickup_type . "\n";
-                $message .= "Pickup Time: " . $pickup_time . "\n";
+                if ( $enable_pickup ) {
+                    $message .= "Pickup Type: " . $pickup_type . "\n";
+                    $message .= "Pickup Time: " . $pickup_time . "\n";
+                }
                 $message .= "\nOrder Details:\n";
                 foreach ( $items as $item ) {
                     $message .= $item->product_name . ' x ' . $item->quantity . ' - $' . $item->product_price . "\n";
@@ -618,6 +631,7 @@ add_action('plugins_loaded', function () {
 
                 wp_send_json_success( 'Payment successful and order processed. Order Number: ' . $order_id );
             }
+
 
 			/**
 			 * Renders the Stripe Transactions admin page.
