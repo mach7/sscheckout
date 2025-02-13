@@ -167,7 +167,12 @@ jQuery(document).ready(function($) {
             var dayAbbr = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
             var dayStr = dayAbbr[dayNum - 1];
             var allowedBlocks = pickupType.time_blocks[dayStr];
-            if (allowedBlocks && allowedBlocks.length > 0) {
+            // If there are no allowed blocks for the day, consider it closed.
+            if (!allowedBlocks || allowedBlocks.length === 0) {
+                $("#pickup-time-error").text("The selected day is closed for orders.");
+                $("#ss-checkout-form button[type='submit']").prop("disabled", true);
+                return;
+            } else {
                 var hours = pickupDateTime.getHours();
                 var minutes = pickupDateTime.getMinutes();
                 var timeFormatted = ('0' + hours).slice(-2) + ':' + ('0' + minutes).slice(-2);
@@ -185,11 +190,13 @@ jQuery(document).ready(function($) {
                     return;
                 }
             }
+            
             // If all validations pass, clear error message and enable the submit button.
             $("#pickup-time-error").text("");
             $("#ss-checkout-form button[type='submit']").prop("disabled", false);
         });
     }
+    
     
     
     
