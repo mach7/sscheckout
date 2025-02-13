@@ -776,7 +776,7 @@ add_action('plugins_loaded', function () {
                     
                     // Process pickup types input.
                     if ( isset( $_POST['ssc_pickup_types'] ) ) {
-                        // Here we simply save the raw JSON data.
+                        // Save the raw JSON data.
                         update_option( 'ssc_pickup_types', maybe_serialize( wp_unslash( $_POST['ssc_pickup_types'] ) ) );
                     }
                     
@@ -798,6 +798,16 @@ add_action('plugins_loaded', function () {
                     'friday'    => 'Friday',
                     'saturday'  => 'Saturday',
                 ];
+                
+                // Prepare the pretty printed JSON for pickup types.
+                $pickup_types_raw = get_option( 'ssc_pickup_types', '[]' );
+                $pickup_types_data = maybe_unserialize( $pickup_types_raw );
+                $decoded = json_decode( $pickup_types_data, true );
+                if ( $decoded ) {
+                    $pickup_types_pretty = json_encode( $decoded, JSON_PRETTY_PRINT );
+                } else {
+                    $pickup_types_pretty = $pickup_types_data;
+                }
                 ?>
                 <div class="wrap">
                     <h1>Shopping Cart Settings</h1>
@@ -872,12 +882,13 @@ add_action('plugins_loaded', function () {
                 }
             }]
                         </pre>
-                        <textarea name="ssc_pickup_types" rows="8" cols="50" placeholder='Enter pickup types as JSON...'><?php echo esc_textarea( json_encode( $pickup_types ) ); ?></textarea>
+                        <textarea name="ssc_pickup_types" rows="8" cols="50" placeholder='Enter pickup types as JSON...'><?php echo esc_textarea( $pickup_types_pretty ); ?></textarea>
                         <?php submit_button( 'Save Settings', 'primary', 'ssc_save_settings' ); ?>
                     </form>
                 </div>
                 <?php
             }
+            
             
                                     
             
