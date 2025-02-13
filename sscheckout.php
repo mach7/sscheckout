@@ -83,6 +83,8 @@ add_action('plugins_loaded', function () {
 						setcookie( 'ssc_uid', $uid, time() + ( 3600 * 24 * 30 ), COOKIEPATH, COOKIE_DOMAIN );
 					}
 				});
+                add_action( 'wp_ajax_ssc_remove_pickup_type', [ $this, 'remove_pickup_type_ajax' ] );
+
 			}
 
 			/**
@@ -1083,6 +1085,27 @@ add_action('plugins_loaded', function () {
                 });
                 </script>
                 <?php
+            }
+            public function remove_pickup_type_ajax() {
+                if ( ! current_user_can( 'manage_options' ) ) {
+                    wp_send_json_error( 'Not allowed' );
+                }
+                $nonce = isset($_POST['nonce']) ? sanitize_text_field($_POST['nonce']) : '';
+                if ( ! wp_verify_nonce( $nonce, 'ssc_remove_pickup_type_nonce' ) ) {
+                    wp_send_json_error( 'Security check failed.' );
+                }
+                $pickup_id = isset($_POST['pickup_id']) ? intval($_POST['pickup_id']) : 0;
+                if ( ! $pickup_id ) {
+                    wp_send_json_error( 'Invalid pickup type ID.' );
+                }
+                global $wpdb;
+                $table = $wpdb->prefix . 'flw_pickup_types';
+                $result = $wpdb->delete( $table, array( 'id' => $pickup_id ) );
+                if ( false !== $result ) {
+                    wp_send_json_success( 'Pickup type removed successfully.' );
+                } else {
+                    wp_send_json_error( 'Error removing pickup type.' );
+                }
             }
             
 		}
