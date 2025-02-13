@@ -79,6 +79,10 @@ add_action('plugins_loaded', function () {
                 add_action( 'wp_ajax_ssc_checkout', [ $this, 'process_checkout' ] );
                 add_action( 'wp_ajax_nopriv_ssc_checkout', [ $this, 'process_checkout' ] );
                 add_action( 'admin_menu', [ $this, 'register_submenu' ] );
+                add_action( 'wp_ajax_ssc_remove_pickup_type', [ $this, 'remove_pickup_type_ajax' ] );
+                // Optionally, if non-logged-in users should be allowed (if applicable):
+                // add_action( 'wp_ajax_nopriv_ssc_remove_pickup_type', [ $this, 'remove_pickup_type_ajax' ] );
+
                 add_action( 'init', function() {
                     if ( ! is_user_logged_in() && ! isset( $_COOKIE['ssc_uid'] ) ) {
                         $uid = 'guest_' . wp_generate_uuid4();
@@ -1108,6 +1112,7 @@ add_action('plugins_loaded', function () {
                     wp_send_json_error( 'Error removing pickup type.' );
                 }
             }
+            
             
 		}
 
