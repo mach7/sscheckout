@@ -241,7 +241,7 @@ add_action('plugins_loaded', function () {
                     'simple-shopping-cart',
                     plugins_url( 'assets/css/simple-shopping-cart.css', __FILE__ )
                 );
-            }
+			}
 
 			/**
 			 * Returns a unique identifier for the current user.
@@ -371,7 +371,8 @@ add_action('plugins_loaded', function () {
                             </select>
                             <br>
                             <label for="pickup_time">Pickup Time:</label>
-                            <input type="time" name="pickup_time" id="pickup_time" placeholder="Select pickup time" required>
+                            <!-- Use datetime-local so both date and time are provided -->
+                            <input type="datetime-local" name="pickup_time" id="pickup_time" placeholder="Select pickup time" required>
                             <br><br>
                         <?php endif; ?>
             
@@ -440,9 +441,9 @@ add_action('plugins_loaded', function () {
 			}
 
 			/**
-             * AJAX handler to process checkout.
-             */
-            public function process_checkout() {
+			 * AJAX handler to process checkout.
+			 */
+			public function process_checkout() {
                 // Sanitize and retrieve form input.
                 $name          = sanitize_text_field( wp_unslash( $_POST['name'] ) );
                 $email         = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
@@ -455,8 +456,8 @@ add_action('plugins_loaded', function () {
                 if ( $enable_pickup ) {
                     $pickup_type = sanitize_text_field( wp_unslash( $_POST['pickup_type'] ) );
                     $pickup_time = sanitize_text_field( wp_unslash( $_POST['pickup_time'] ) );
-                    // Validate pickup time if pickup options are enabled.
-                    $pickup_datetime = DateTime::createFromFormat( 'Y-m-d H:i', $pickup_time );
+                    // Since we're using datetime-local, the format is "Y-m-d\TH:i"
+                    $pickup_datetime = DateTime::createFromFormat( 'Y-m-d\TH:i', $pickup_time );
                     if ( ! $pickup_datetime ) {
                         wp_send_json_error( 'Invalid pickup time format. Please use the provided date picker.' );
                     }
@@ -631,7 +632,6 @@ add_action('plugins_loaded', function () {
 
                 wp_send_json_success( 'Payment successful and order processed. Order Number: ' . $order_id );
             }
-
 
 			/**
 			 * Renders the Stripe Transactions admin page.
