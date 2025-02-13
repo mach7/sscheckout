@@ -121,17 +121,35 @@ jQuery(document).ready(function($) {
                 $("#ss-checkout-form button[type='submit']").prop("disabled", true);
                 return;
             }
-            // Validate global restrictions.
+            // Validate global restrictions for closed days.
             var dayNum = pickupDate.getDay();
-            if (dayNum === 0) { dayNum = 7; }
+            if (dayNum === 0) { dayNum = 7; } // Convert Sunday from 0 to 7.
+
+            // Convert closedDays so that any string values ("monday", "Mon", etc.) become numbers.
             var closedDays = sscheckout_params.global_restrictions.closed_days || [];
-            // Ensure closedDays are numbers
-            closedDays = closedDays.map(function(day) { return parseInt(day, 10); });
+            closedDays = closedDays.map(function(day) {
+                if (typeof day === "string") {
+                    day = day.toLowerCase();
+                    var map = {
+                        "monday": 1, "mon": 1,
+                        "tuesday": 2, "tue": 2,
+                        "wednesday": 3, "wed": 3,
+                        "thursday": 4, "thu": 4,
+                        "friday": 5, "fri": 5,
+                        "saturday": 6, "sat": 6,
+                        "sunday": 7, "sun": 7
+                    };
+                    return map[day] || parseInt(day, 10);
+                }
+                return parseInt(day, 10);
+            });
+
             if (closedDays.indexOf(dayNum) !== -1) {
                 $("#pickup-time-error").text("The selected day is closed for orders.");
                 $("#ss-checkout-form button[type='submit']").prop("disabled", true);
                 return;
             }
+
 
             // Validate against allowed time blocks for the selected pickup type.
             // Our pickup type's time_blocks use 3-letter abbreviations: Mon, Tue, Wed, etc.
