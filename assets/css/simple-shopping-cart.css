@@ -43,3 +43,8 @@
 .ss-product button {
     margin-right: 5px;
 }
+
+
+.ssc-cart-table tbody tr:nth-child(even) {
+    background-color: #f9f9f9; /* Light gray background for even rows */
+}
