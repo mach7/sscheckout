@@ -773,12 +773,20 @@ add_action('plugins_loaded', function () {
                         }
                         update_option( 'ssc_store_hours', $store_hours );
                     }
+                    
+                    // Process pickup types input.
+                    if ( isset( $_POST['ssc_pickup_types'] ) ) {
+                        // Here we simply save the raw JSON data.
+                        update_option( 'ssc_pickup_types', maybe_serialize( wp_unslash( $_POST['ssc_pickup_types'] ) ) );
+                    }
+                    
                     echo '<div class="updated"><p>Settings saved.</p></div>';
                 }
                 
                 // Retrieve saved settings.
                 $order_admin_email = get_option( 'ssc_order_admin_email', get_option( 'admin_email' ) );
                 $store_hours       = maybe_unserialize( get_option( 'ssc_store_hours', [] ) );
+                $pickup_types      = maybe_unserialize( get_option( 'ssc_pickup_types', [] ) );
                 
                 // Define days of the week.
                 $days = [
@@ -843,11 +851,34 @@ add_action('plugins_loaded', function () {
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
+                        <hr>
+                        <h2>Pickup Types Management</h2>
+                        <p>
+                            Define pickup types as a JSON array. Each pickup type should include a name, a minimum lead time (in hours), and time blocks for each day.
+                            For example:
+                        </p>
+                        <pre>
+            [{
+                "name": "Bakery Orders",
+                "min_lead_time": 24,
+                "time_blocks": {
+                    "1": ["09:00-12:00", "13:00-16:00"],
+                    "2": ["09:00-12:00", "13:00-16:00"],
+                    "3": ["09:00-12:00", "13:00-16:00"],
+                    "4": ["09:00-12:00", "13:00-16:00"],
+                    "5": ["09:00-12:00", "13:00-16:00"],
+                    "6": ["10:00-14:00"],
+                    "7": []
+                }
+            }]
+                        </pre>
+                        <textarea name="ssc_pickup_types" rows="8" cols="50" placeholder='Enter pickup types as JSON...'><?php echo esc_textarea( json_encode( $pickup_types ) ); ?></textarea>
                         <?php submit_button( 'Save Settings', 'primary', 'ssc_save_settings' ); ?>
                     </form>
                 </div>
                 <?php
             }
+            
                                     
             
 		}
