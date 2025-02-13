@@ -147,7 +147,8 @@ jQuery(document).ready(function($) {
                     }
                 }
                 if (!valid) {
-                    $("#pickup-time-error").text("The selected pickup time is outside the allowed time blocks for " + pickupType.name + ".");
+                    $("#pickup-time-error").text(pickupType.name + " orders can only be picked up during designated hours. Please choose a different pickup time.");
+                    
                     return;
                 }
             }
