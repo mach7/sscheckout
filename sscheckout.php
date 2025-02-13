@@ -221,7 +221,11 @@ add_action('plugins_loaded', function () {
 				$pickup_types = $wpdb->get_results("SELECT * FROM $table", ARRAY_A);
 				if( is_array($pickup_types) ) {
 					foreach($pickup_types as &$pt) {
-						$pt['time_blocks'] = wp_json_decode($pt['time_blocks'], true);
+						if ( function_exists('wp_json_decode') ) {
+                            $blocks = wp_json_decode($pt['time_blocks'], true);
+                        } else {
+                            $blocks = json_decode($pt['time_blocks'], true);
+                        }
 					}
 					unset($pt);
 				}
