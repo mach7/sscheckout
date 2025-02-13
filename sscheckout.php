@@ -501,13 +501,18 @@ add_action('plugins_loaded', function () {
                 }
 
                 if ( $enable_pickup ) {
-                    $closed_days       = array_map( 'intval', (array) get_option( 'ssc_closed_days', [] ) );
-                    $after_hours_start = get_option( 'ssc_after_hours_start', '18:00' );
-                    $after_hours_end   = get_option( 'ssc_after_hours_end', '08:00' );
-                    var_dump($closed_days);
-
-                    if ( in_array( intval( $pickup_datetime->format( 'N' ) ), $closed_days, true ) ) {
-                        wp_send_json_error( 'The selected day is closed for orders.' );
+                    $closed_days = array_map('intval', (array) get_option('ssc_closed_days', []));
+                    $after_hours_start = get_option('ssc_after_hours_start', '18:00');
+                    $after_hours_end   = get_option('ssc_after_hours_end', '08:00');
+                    
+                    // Debug logging: log closed days and the pickup day's numeric value.
+                    error_log("DEBUG: Closed days from settings: " . print_r($closed_days, true));
+                    $pickup_day = intval($pickup_datetime->format('N'));
+                    error_log("DEBUG: Pickup datetime (N): " . $pickup_day);
+                    
+                    if ( in_array( $pickup_day, $closed_days, true ) ) {
+                        // Include debug info in the error response (for troubleshooting only)
+                        wp_send_json_error( 'The selected day is closed for orders. [DEBUG: closed_days: ' . print_r($closed_days, true) . '; pickup day: ' . $pickup_day . ']' );
                     }
 
                     global $wpdb;
