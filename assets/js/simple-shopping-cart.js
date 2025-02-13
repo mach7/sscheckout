@@ -83,13 +83,78 @@ jQuery(document).ready(function($) {
         });
     }
     
-    /***** Pickup Time Field *****/
-    // If you're using a native HTML5 time input, no additional JS initialization is needed.
-    // Example HTML for pickup time in your checkout form:
-    // <input type="time" name="pickup_time" id="pickup_time" required>
-    //
-    // If you require a combined date/time picker with a 12-hour format,
-    // consider enqueuing a dedicated JS library (such as Tempus Dominus or similar).
+    /***** Client-Side Pickup Time Validation *****/
+    // Only add pickup time validation if pickup is enabled.
+    if (sscheckout_params.enable_pickup) {
+        // Listen for changes on the pickup time field.
+        $("#pickup_time").on("change", function() {
+            // Expected format from a datetime-local input: "YYYY-MM-DDTHH:mm"
+            var pickupTimeStr = $(this).val();
+            var pickupDate = new Date(pickupTimeStr);
+            if (isNaN(pickupDate)) {
+                $("#pickup-time-error").text("Invalid date/time selected.");
+                return;
+            }
+            var now = new Date();
+            // Get the selected pickup type.
+            var pickupTypeName = $("#pickup_type").val();
+            var pickupType = null;
+            if (sscheckout_params.pickup_types && Array.isArray(sscheckout_params.pickup_types)) {
+                for (var i = 0; i < sscheckout_params.pickup_types.length; i++) {
+                    if (sscheckout_params.pickup_types[i].name === pickupTypeName) {
+                        pickupType = sscheckout_params.pickup_types[i];
+                        break;
+                    }
+                }
+            }
+            if (!pickupType) {
+                $("#pickup-time-error").text("Invalid pickup type.");
+                return;
+            }
+            // Validate minimum lead time (in hours).
+            var minLeadTime = pickupType.min_lead_time; // in hours
+            var minAllowedTime = new Date(now.getTime() + minLeadTime * 60 * 60 * 1000);
+            if (pickupDate < minAllowedTime) {
+                $("#pickup-time-error").text("Pickup time must be at least " + minLeadTime + " hours from now.");
+                return;
+            }
+            // Validate global restrictions.
+            // JavaScript Date.getDay() returns 0 for Sunday, 1 for Monday, etc.
+            // Convert so Monday=1, Sunday=7.
+            var dayNum = pickupDate.getDay();
+            if (dayNum === 0) { dayNum = 7; }
+            var closedDays = sscheckout_params.global_restrictions.closed_days || [];
+            if (closedDays.indexOf(dayNum) !== -1) {
+                $("#pickup-time-error").text("The selected day is closed for orders.");
+                return;
+            }
+            // Validate allowed time blocks for the selected pickup type.
+            // Our pickup type's time_blocks use 3-letter abbreviations: Mon, Tue, Wed, etc.
+            var dayAbbr = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            var dayStr = dayAbbr[dayNum - 1];
+            var allowedBlocks = pickupType.time_blocks[dayStr];
+            if (allowedBlocks && allowedBlocks.length > 0) {
+                // Get the time portion in HH:mm format.
+                var hours = pickupDate.getHours();
+                var minutes = pickupDate.getMinutes();
+                var timeStr = ('0' + hours).slice(-2) + ":" + ('0' + minutes).slice(-2);
+                var valid = false;
+                for (var j = 0; j < allowedBlocks.length; j++) {
+                    var range = allowedBlocks[j].split("-");
+                    if (timeStr >= range[0] && timeStr <= range[1]) {
+                        valid = true;
+                        break;
+                    }
+                }
+                if (!valid) {
+                    $("#pickup-time-error").text("The selected pickup time is outside the allowed time blocks for " + pickupType.name + ".");
+                    return;
+                }
+            }
+            // If all checks pass, clear any error message.
+            $("#pickup-time-error").text("");
+        });
+    }
     
     /***** Cart Update Functionality *****/
     // Add to Cart.

@@ -234,8 +234,16 @@ add_action('plugins_loaded', function () {
                 );
                 wp_localize_script( 'simple-shopping-cart', 'sscheckout_params', [
                     'ajax_url'       => admin_url( 'admin-ajax.php' ),
-                    'publishableKey' => get_option( 'flw_stripe_public_key' )
+                    'publishableKey' => get_option( 'flw_stripe_public_key' ),
+                    'enable_pickup'  => get_option( 'ssc_enable_pickup_options', 1 ),
+                    'global_restrictions' => [
+                         'closed_days'      => get_option('ssc_closed_days', []), // Expect numbers 1-7 (Mon=1, Sun=7)
+                         'after_hours_start'=> get_option('ssc_after_hours_start', '18:00'),
+                         'after_hours_end'  => get_option('ssc_after_hours_end', '08:00')
+                    ],
+                    'pickup_types'   => json_decode( get_option('ssc_pickup_types', '[]'), true )
                 ] );
+                
                 // Enqueue CSS on all pages.
                 wp_enqueue_style(
                     'simple-shopping-cart',
@@ -371,8 +379,9 @@ add_action('plugins_loaded', function () {
                             </select>
                             <br>
                             <label for="pickup_time">Pickup Time:</label>
-                            <!-- Use datetime-local so both date and time are provided -->
                             <input type="datetime-local" name="pickup_time" id="pickup_time" placeholder="Select pickup time" required>
+                            <div id="pickup-time-error" style="color:red;"></div>
+
                             <br><br>
                         <?php endif; ?>
             
