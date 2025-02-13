@@ -378,9 +378,13 @@ add_action('plugins_loaded', function () {
                                 ?>
                             </select>
                             <br>
+                            <label for="pickup_date">Pickup Date:</label>
+                            <input type="date" name="pickup_date" id="pickup_date" required>
+                            <br>
                             <label for="pickup_time">Pickup Time:</label>
-                            <input type="datetime-local" name="pickup_time" id="pickup_time" placeholder="Select pickup time" required>
+                            <input type="time" name="pickup_time" id="pickup_time" required>
                             <div id="pickup-time-error" style="color:red;"></div>
+
 
                             <br><br>
                         <?php endif; ?>
