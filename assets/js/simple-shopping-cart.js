@@ -122,16 +122,17 @@ jQuery(document).ready(function($) {
                 return;
             }
             // Validate global restrictions.
-            // JavaScript Date.getDay() returns 0 for Sunday, 1 for Monday, ... 6 for Saturday.
-            // Convert so that Monday=1, Sunday=7.
             var dayNum = pickupDate.getDay();
             if (dayNum === 0) { dayNum = 7; }
             var closedDays = sscheckout_params.global_restrictions.closed_days || [];
+            // Ensure closedDays are numbers
+            closedDays = closedDays.map(function(day) { return parseInt(day, 10); });
             if (closedDays.indexOf(dayNum) !== -1) {
                 $("#pickup-time-error").text("The selected day is closed for orders.");
                 $("#ss-checkout-form button[type='submit']").prop("disabled", true);
                 return;
             }
+
             // Validate against allowed time blocks for the selected pickup type.
             // Our pickup type's time_blocks use 3-letter abbreviations: Mon, Tue, Wed, etc.
             var dayAbbr = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
