@@ -344,7 +344,7 @@ add_action('plugins_loaded', function () {
                         </select>
                         <br>
                         <label for="pickup_time">Pickup Time:</label>
-                        <input type="text" name="pickup_time" id="pickup_time" placeholder="Select pickup time" required>
+                        <input type="time" name="pickup_time" id="pickup_time" placeholder="Select pickup time" required>
                         <br><br>
             
                         <h3>Payment Details</h3>
