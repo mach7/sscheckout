@@ -68,24 +68,25 @@ add_action('plugins_loaded', function () {
 			 * Constructor – sets up activation, shortcodes, AJAX handlers, scripts, and admin menu.
 			 */
 			public function __construct() {
-				register_activation_hook( __FILE__, [ __CLASS__, 'activate' ] );
-				add_action( 'init', [ $this, 'maybe_create_tables' ] );
-				add_action( 'init', [ $this, 'register_shortcodes' ] );
-				add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_scripts' ] );
-				add_action( 'wp_ajax_ssc_update_cart', [ $this, 'update_cart' ] );
-				add_action( 'wp_ajax_nopriv_ssc_update_cart', [ $this, 'update_cart' ] );
-				add_action( 'wp_ajax_ssc_checkout', [ $this, 'process_checkout' ] );
-				add_action( 'wp_ajax_nopriv_ssc_checkout', [ $this, 'process_checkout' ] );
-				add_action( 'admin_menu', [ $this, 'register_submenu' ] );
-				add_action( 'init', function() {
-					if ( ! is_user_logged_in() && ! isset( $_COOKIE['ssc_uid'] ) ) {
-						$uid = 'guest_' . wp_generate_uuid4();
-						setcookie( 'ssc_uid', $uid, time() + ( 3600 * 24 * 30 ), COOKIEPATH, COOKIE_DOMAIN );
-					}
-				});
-                add_action( 'wp_ajax_ssc_remove_pickup_type', [ $this, 'remove_pickup_type_ajax' ] );
-
-			}
+                register_activation_hook( __FILE__, [ __CLASS__, 'activate' ] );
+                add_action( 'init', [ $this, 'maybe_create_tables' ] );
+                add_action( 'init', [ $this, 'register_shortcodes' ] );
+                add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_scripts' ] );
+                // Enqueue script in admin area as well.
+                add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_scripts' ] );
+                add_action( 'wp_ajax_ssc_update_cart', [ $this, 'update_cart' ] );
+                add_action( 'wp_ajax_nopriv_ssc_update_cart', [ $this, 'update_cart' ] );
+                add_action( 'wp_ajax_ssc_checkout', [ $this, 'process_checkout' ] );
+                add_action( 'wp_ajax_nopriv_ssc_checkout', [ $this, 'process_checkout' ] );
+                add_action( 'admin_menu', [ $this, 'register_submenu' ] );
+                add_action( 'init', function() {
+                    if ( ! is_user_logged_in() && ! isset( $_COOKIE['ssc_uid'] ) ) {
+                        $uid = 'guest_' . wp_generate_uuid4();
+                        setcookie( 'ssc_uid', $uid, time() + ( 3600 * 24 * 30 ), COOKIEPATH, COOKIE_DOMAIN );
+                    }
+                });
+            }
+            
 
 			/**
 			 * Plugin activation callback to create required database tables.
