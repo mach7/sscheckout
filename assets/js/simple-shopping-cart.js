@@ -137,12 +137,30 @@ jQuery(document).ready(function($) {
             var dayNum = pickupDateTime.getDay();
             if (dayNum === 0) { dayNum = 7; } // Convert Sunday from 0 to 7.
             var closedDays = sscheckout_params.global_restrictions.closed_days || [];
-            closedDays = closedDays.map(function(day) { return parseInt(day, 10); });
+            closedDays = closedDays.map(function(day) {
+                var num = parseInt(day, 10);
+                if (!isNaN(num)) {
+                    return num;
+                }
+                // Map string representations to numbers.
+                var mapping = {
+                    "mon": 1, "monday": 1,
+                    "tue": 2, "tues": 2, "tuesday": 2,
+                    "wed": 3, "wednesday": 3,
+                    "thu": 4, "thurs": 4, "thursday": 4,
+                    "fri": 5, "friday": 5,
+                    "sat": 6, "saturday": 6,
+                    "sun": 7, "sunday": 7
+                };
+                return mapping[day.toLowerCase()] || 0;
+            });
+
             if (closedDays.indexOf(dayNum) !== -1) {
                 $("#pickup-time-error").text("The selected day is closed for orders.");
                 $("#ss-checkout-form button[type='submit']").prop("disabled", true);
                 return;
             }
+
             
             // Validate against allowed time blocks.
             // For time blocks, we use 3-letter day abbreviations.
