@@ -331,9 +331,9 @@ add_action('plugins_loaded', function () {
                                 <?php foreach ( $items as $item ) : ?>
                                     <tr data-product="<?php echo esc_attr( $item->product_name ); ?>">
                                         <td><?php echo esc_html( $item->product_name ); ?></td>
-                                        <td><?php echo esc_html( $item->product_price ); ?></td>
+                                        <td class="ssc-item-price"><?php echo esc_html( $item->product_price ); ?></td>
                                         <td class="ssc-item-quantity"><?php echo intval( $item->quantity ); ?></td>
-                                        <td>
+                                        <td class="ssc-item-actions">
                                             <button class="ssc-minus" data-action="minus">–</button>
                                             <button class="ssc-plus" data-action="plus">+</button>
                                             <button class="ssc-remove" data-action="remove">🗑️</button>

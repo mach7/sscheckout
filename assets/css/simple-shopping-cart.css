@@ -1,3 +1,6 @@
+.ssc-item-price, .ssc-item-quantity, .ssc-item-actions{
+	text-align: center;
+}
 .qualityCol, .actionsCol {
 	width:200px;
 }
