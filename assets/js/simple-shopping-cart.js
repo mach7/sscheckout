@@ -141,21 +141,19 @@ jQuery(document).ready(function($) {
                 // For testing purposes, assume Monday (1) is closed if no value is set.
                 closedDays = [1];
             } else {
+                // Use a unified mapping for numbers and day names.
+                var mapping = {
+                    "1": 1, "mon": 1, "monday": 1,
+                    "2": 2, "tue": 2, "tues": 2, "tuesday": 2,
+                    "3": 3, "wed": 3, "wednesday": 3,
+                    "4": 4, "thu": 4, "thurs": 4, "thursday": 4,
+                    "5": 5, "fri": 5, "friday": 5,
+                    "6": 6, "sat": 6, "saturday": 6,
+                    "7": 7, "sun": 7, "sunday": 7
+                };
                 closedDays = closedDays.map(function(day) {
-                    var num = parseInt(day, 10);
-                    if (!isNaN(num)) {
-                        return num;
-                    }
-                    var mapping = {
-                        "mon": 1, "monday": 1,
-                        "tue": 2, "tues": 2, "tuesday": 2,
-                        "wed": 3, "wednesday": 3,
-                        "thu": 4, "thurs": 4, "thursday": 4,
-                        "fri": 5, "friday": 5,
-                        "sat": 6, "saturday": 6,
-                        "sun": 7, "sunday": 7
-                    };
-                    return mapping[day.toLowerCase()] || 0;
+                    var lower = day.toString().toLowerCase().trim();
+                    return mapping[lower] || 0;
                 });
             }
             if (closedDays.indexOf(dayNum) !== -1) {
@@ -163,8 +161,6 @@ jQuery(document).ready(function($) {
                 $("#ss-checkout-form button[type='submit']").prop("disabled", true);
                 return;
             }
-
-
             
             // Validate against allowed time blocks.
             // For time blocks, we use 3-letter day abbreviations.
@@ -194,6 +190,7 @@ jQuery(document).ready(function($) {
             $("#ss-checkout-form button[type='submit']").prop("disabled", false);
         });
     }
+    
     
     
     /***** Cart Update Functionality *****/
