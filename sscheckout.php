@@ -12,6 +12,21 @@ Tested up to: 6.2
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
+function ssc_display_disabled_banner() {
+    if ( get_option( 'ssc_global_orders_disabled', 0 ) ) {
+        echo '<div style="
+            background: #fdd;
+            color: #900;
+            text-align: center;
+            padding: 10px;
+            font-weight: bold;
+            border-bottom: 2px solid #900;
+            ">
+            Online orders are currently disabled.
+        </div>';
+    }
+}
+add_action( 'wp_head', 'ssc_display_disabled_banner' );
 
 function enqueue_datepicker_assets() {
     wp_enqueue_script( 'jquery-ui-datepicker' );
