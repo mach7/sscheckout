@@ -794,7 +794,11 @@ add_action('plugins_loaded', function () {
                 $pickup_types = $wpdb->get_results("SELECT * FROM $pickup_table", ARRAY_A);
                 if( is_array($pickup_types) ) {
                     foreach($pickup_types as &$pt) {
-                        $blocks = wp_json_decode($pt['time_blocks'], true);
+                        if ( function_exists('wp_json_decode') ) {
+                            $blocks = wp_json_decode($pt['time_blocks'], true);
+                        } else {
+                            $blocks = json_decode($pt['time_blocks'], true);
+                        }
                         foreach ($blocks as $day => $arr) {
                             $blocks[$day] = implode(', ', $arr);
                         }
@@ -802,6 +806,7 @@ add_action('plugins_loaded', function () {
                     }
                     unset($pt);
                 }
+
                 $enable_pickup = get_option( 'ssc_enable_pickup_options', 1 );
                 $days = array(
                     'sunday'    => 'Sunday',
