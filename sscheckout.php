@@ -2,7 +2,7 @@
 /*
 Plugin Name: Simple Shopping Cart
 Description: A simple shopping cart plugin with Stripe checkout integration.
-Version: 1.2.5
+Version: 1.2.6
 Author: Tyson Brooks
 Author URI: https://frostlineworks.com
 Tested up to: 6.2
@@ -24,10 +24,8 @@ add_action('plugins_loaded', function () {
 
 	// Check if the FLW Plugin Update Checker class exists.
 	if ( class_exists( 'FLW_Plugin_Update_Checker' ) ) {
-		$pluginSlug = basename( dirname( __FILE__ ) ); // Dynamically get the plugin slug.
-		// Initialize the update checker.
+		$pluginSlug = basename( dirname( __FILE__ ) );
 		FLW_Plugin_Update_Checker::initialize( __FILE__, $pluginSlug );
-		// Replace the update icon.
 		add_filter('site_transient_update_plugins', function ($transient) {
 			if ( isset( $transient->response ) ) {
 				foreach ( $transient->response as $plugin_slug => $plugin_data ) {
@@ -44,7 +42,6 @@ add_action('plugins_loaded', function () {
 			return $transient;
 		});
 	} else {
-		// Admin notice for missing FLW Plugin Library.
 		add_action('admin_notices', function () {
 			if ( ! function_exists( 'get_plugins' ) ) {
 				require_once ABSPATH . 'wp-admin/includes/plugin.php';
@@ -63,7 +60,6 @@ add_action('plugins_loaded', function () {
 		});
 	}
 
-	// Check if the FLW Plugin Library is available.
 	if ( class_exists( 'FLW_Plugin_Library' ) ) {
 
 		class SimpleShoppingCart_Plugin {
@@ -72,22 +68,15 @@ add_action('plugins_loaded', function () {
 			 * Constructor – sets up activation, shortcodes, AJAX handlers, scripts, and admin menu.
 			 */
 			public function __construct() {
-				// Activation hook to create required tables.
 				register_activation_hook( __FILE__, [ __CLASS__, 'activate' ] );
-				// Check on every load if the tables exist.
 				add_action( 'init', [ $this, 'maybe_create_tables' ] );
-				// Register shortcodes.
 				add_action( 'init', [ $this, 'register_shortcodes' ] );
-				// Enqueue front-end scripts and styles.
 				add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_scripts' ] );
-				// AJAX actions for updating the cart and processing checkout.
 				add_action( 'wp_ajax_ssc_update_cart', [ $this, 'update_cart' ] );
 				add_action( 'wp_ajax_nopriv_ssc_update_cart', [ $this, 'update_cart' ] );
 				add_action( 'wp_ajax_ssc_checkout', [ $this, 'process_checkout' ] );
 				add_action( 'wp_ajax_nopriv_ssc_checkout', [ $this, 'process_checkout' ] );
-				// Register admin submenu pages.
 				add_action( 'admin_menu', [ $this, 'register_submenu' ] );
-				// Set a cookie for guest users.
 				add_action( 'init', function() {
 					if ( ! is_user_logged_in() && ! isset( $_COOKIE['ssc_uid'] ) ) {
 						$uid = 'guest_' . wp_generate_uuid4();
@@ -104,8 +93,9 @@ add_action('plugins_loaded', function () {
 				require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 				$charset_collate = $wpdb->get_charset_collate();
 
+				// Shopping Cart table.
 				$table1 = $wpdb->prefix . 'flw_shopping_cart';
-				$sql1   = "CREATE TABLE $table1 (
+				$sql1 = "CREATE TABLE $table1 (
 					id mediumint(9) NOT NULL AUTO_INCREMENT,
 					uid varchar(100) NOT NULL,
 					product_name varchar(255) NOT NULL,
@@ -114,9 +104,11 @@ add_action('plugins_loaded', function () {
 					added_at datetime DEFAULT CURRENT_TIMESTAMP,
 					PRIMARY KEY (id)
 				) $charset_collate;";
+				dbDelta( $sql1 );
 
+				// Order History table.
 				$table2 = $wpdb->prefix . 'flw_order_history';
-				$sql2   = "CREATE TABLE $table2 (
+				$sql2 = "CREATE TABLE $table2 (
 					id mediumint(9) NOT NULL AUTO_INCREMENT,
 					uid varchar(100) NOT NULL,
 					order_id varchar(100) NOT NULL,
@@ -126,49 +118,34 @@ add_action('plugins_loaded', function () {
 					purchased_at datetime DEFAULT CURRENT_TIMESTAMP,
 					PRIMARY KEY (id)
 				) $charset_collate;";
-
-				dbDelta( $sql1 );
 				dbDelta( $sql2 );
+
+				// Pickup Types table.
+				$table3 = $wpdb->prefix . 'flw_pickup_types';
+				$sql3 = "CREATE TABLE $table3 (
+					id mediumint(9) NOT NULL AUTO_INCREMENT,
+					name varchar(255) NOT NULL,
+					min_lead_time int NOT NULL DEFAULT 0,
+					time_blocks text NOT NULL,
+					created_at datetime DEFAULT CURRENT_TIMESTAMP,
+					PRIMARY KEY (id)
+				) $charset_collate;";
+				dbDelta( $sql3 );
 			}
 
 			/**
-			 * Checks if the custom tables exist; creates them if not.
+			 * Checks if the custom tables exist; if not, calls activation.
 			 */
 			public function maybe_create_tables() {
 				global $wpdb;
 				$table1 = $wpdb->prefix . 'flw_shopping_cart';
 				$table2 = $wpdb->prefix . 'flw_order_history';
-
+				$table3 = $wpdb->prefix . 'flw_pickup_types';
 				$exists1 = $wpdb->get_var( $wpdb->prepare( "SHOW TABLES LIKE %s", $table1 ) );
 				$exists2 = $wpdb->get_var( $wpdb->prepare( "SHOW TABLES LIKE %s", $table2 ) );
-
-				if ( ! $exists1 || ! $exists2 ) {
-					require_once ABSPATH . 'wp-admin/includes/upgrade.php';
-					$charset_collate = $wpdb->get_charset_collate();
-
-					$sql1 = "CREATE TABLE $table1 (
-						id mediumint(9) NOT NULL AUTO_INCREMENT,
-						uid varchar(100) NOT NULL,
-						product_name varchar(255) NOT NULL,
-						product_price decimal(10,2) NOT NULL,
-						quantity int NOT NULL DEFAULT 1,
-						added_at datetime DEFAULT CURRENT_TIMESTAMP,
-						PRIMARY KEY (id)
-					) $charset_collate;";
-
-					$sql2 = "CREATE TABLE $table2 (
-						id mediumint(9) NOT NULL AUTO_INCREMENT,
-						uid varchar(100) NOT NULL,
-						order_id varchar(100) NOT NULL,
-						product_name varchar(255) NOT NULL,
-						product_price decimal(10,2) NOT NULL,
-						quantity int NOT NULL DEFAULT 1,
-						purchased_at datetime DEFAULT CURRENT_TIMESTAMP,
-						PRIMARY KEY (id)
-					) $charset_collate;";
-
-					dbDelta( $sql1 );
-					dbDelta( $sql2 );
+				$exists3 = $wpdb->get_var( $wpdb->prepare( "SHOW TABLES LIKE %s", $table3 ) );
+				if ( ! $exists1 || ! $exists2 || ! $exists3 ) {
+					self::activate();
 				}
 			}
 
@@ -180,9 +157,8 @@ add_action('plugins_loaded', function () {
 				require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 				$charset_collate = $wpdb->get_charset_collate();
 
-				// Define the updated SQL for the shopping cart table.
 				$table1 = $wpdb->prefix . 'flw_shopping_cart';
-				$sql1   = "CREATE TABLE $table1 (
+				$sql1 = "CREATE TABLE $table1 (
 					id mediumint(9) NOT NULL AUTO_INCREMENT,
 					uid varchar(100) NOT NULL,
 					product_name varchar(255) NOT NULL,
@@ -191,10 +167,10 @@ add_action('plugins_loaded', function () {
 					added_at datetime DEFAULT CURRENT_TIMESTAMP,
 					PRIMARY KEY (id)
 				) $charset_collate;";
+				dbDelta( $sql1 );
 
-				// Define the updated SQL for the order history table.
 				$table2 = $wpdb->prefix . 'flw_order_history';
-				$sql2   = "CREATE TABLE $table2 (
+				$sql2 = "CREATE TABLE $table2 (
 					id mediumint(9) NOT NULL AUTO_INCREMENT,
 					uid varchar(100) NOT NULL,
 					order_id varchar(100) NOT NULL,
@@ -204,13 +180,24 @@ add_action('plugins_loaded', function () {
 					purchased_at datetime DEFAULT CURRENT_TIMESTAMP,
 					PRIMARY KEY (id)
 				) $charset_collate;";
-
-				dbDelta( $sql1 );
 				dbDelta( $sql2 );
+
+				$table3 = $wpdb->prefix . 'flw_pickup_types';
+				$sql3 = "CREATE TABLE $table3 (
+					id mediumint(9) NOT NULL AUTO_INCREMENT,
+					name varchar(255) NOT NULL,
+					min_lead_time int NOT NULL DEFAULT 0,
+					time_blocks text NOT NULL,
+					created_at datetime DEFAULT CURRENT_TIMESTAMP,
+					PRIMARY KEY (id)
+				) $charset_collate;";
+				dbDelta( $sql3 );
+
+				echo '<div class="updated"><p>Database upgraded successfully.</p></div>';
 			}
 
 			/**
-			 * Registers the shortcodes: [add_to_cart] and [checkout].
+			 * Registers shortcodes.
 			 */
 			public function register_shortcodes() {
 				add_shortcode( 'add_to_cart', [ $this, 'add_to_cart_shortcode' ] );
@@ -221,30 +208,34 @@ add_action('plugins_loaded', function () {
 			 * Enqueues front-end JavaScript and CSS.
 			 */
 			public function enqueue_scripts() {
-                // Always load Stripe.js.
                 wp_enqueue_script( 'stripe-js', 'https://js.stripe.com/v3/', array(), null, true );
-                
-                // Enqueue our main JS file on all pages.
                 wp_enqueue_script(
                     'simple-shopping-cart',
                     plugins_url( 'assets/js/simple-shopping-cart.js', __FILE__ ),
                     [ 'jquery' ],
-                    '1.1.7.2', // update version if needed
+                    '1.1.7.2',
                     true
                 );
+				global $wpdb;
+				$table = $wpdb->prefix . 'flw_pickup_types';
+				$pickup_types = $wpdb->get_results("SELECT * FROM $table", ARRAY_A);
+				if( is_array($pickup_types) ) {
+					foreach($pickup_types as &$pt) {
+						$pt['time_blocks'] = wp_json_decode($pt['time_blocks'], true);
+					}
+					unset($pt);
+				}
                 wp_localize_script( 'simple-shopping-cart', 'sscheckout_params', [
                     'ajax_url'       => admin_url( 'admin-ajax.php' ),
                     'publishableKey' => get_option( 'flw_stripe_public_key' ),
                     'enable_pickup'  => get_option( 'ssc_enable_pickup_options', 1 ),
                     'global_restrictions' => [
-                         'closed_days'      => get_option('ssc_closed_days', []), // Expect numbers 1-7 (Mon=1, Sun=7)
+                         'closed_days'      => get_option('ssc_closed_days', []),
                          'after_hours_start'=> get_option('ssc_after_hours_start', '18:00'),
                          'after_hours_end'  => get_option('ssc_after_hours_end', '08:00')
                     ],
-                    'pickup_types'   => json_decode( get_option('ssc_pickup_types', '[]'), true )
+                    'pickup_types'   => $pickup_types
                 ] );
-                
-                // Enqueue CSS on all pages.
                 wp_enqueue_style(
                     'simple-shopping-cart',
                     plugins_url( 'assets/css/simple-shopping-cart.css', __FILE__ )
@@ -318,9 +309,18 @@ add_action('plugins_loaded', function () {
                 $table = $wpdb->prefix . 'flw_shopping_cart';
                 $items = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $table WHERE uid = %s", $uid ) );
             
-                // Retrieve and decode pickup types from settings.
-                $pickup_types = json_decode( get_option( 'ssc_pickup_types', '[]' ), true );
-                // Check if pickup options are enabled (default to enabled).
+                $pickup_table = $wpdb->prefix . 'flw_pickup_types';
+                $pickup_types = $wpdb->get_results("SELECT * FROM $pickup_table", ARRAY_A);
+                if( is_array($pickup_types) ) {
+					foreach($pickup_types as &$pt) {
+						$blocks = wp_json_decode($pt['time_blocks'], true);
+						foreach ($blocks as $day => $arr) {
+							$blocks[$day] = implode(', ', $arr);
+						}
+						$pt['time_blocks'] = $blocks;
+					}
+					unset($pt);
+				}
                 $enable_pickup = get_option( 'ssc_enable_pickup_options', 1 );
                 ?>
                 <div class="ssc-checkout">
@@ -363,7 +363,7 @@ add_action('plugins_loaded', function () {
                         <?php endif; ?>
                         <label>Phone: <input type="text" name="phone"></label><br>
             
-                        <?php if ( $enable_pickup ) : // Only display pickup options if enabled ?>
+                        <?php if ( $enable_pickup ) : ?>
                             <h3>Pickup Options</h3>
                             <label for="pickup_type">Pickup Type:</label>
                             <select name="pickup_type" id="pickup_type" required>
@@ -384,8 +384,6 @@ add_action('plugins_loaded', function () {
                             <label for="pickup_time">Pickup Time:</label>
                             <input type="time" name="pickup_time" id="pickup_time" required>
                             <div id="pickup-time-error" style="color:red;"></div>
-
-
                             <br><br>
                         <?php endif; ?>
             
@@ -401,9 +399,6 @@ add_action('plugins_loaded', function () {
                 return ob_get_clean();
 			}
 
-			/**
-			 * AJAX handler for updating the shopping cart.
-			 */
 			public function update_cart() {
 				if ( empty( $_POST['product'] ) || empty( $_POST['action_type'] ) ) {
 					wp_send_json_error( 'Missing parameters' );
@@ -453,34 +448,28 @@ add_action('plugins_loaded', function () {
 				wp_send_json_success( [ 'quantity' => $new_quantity ] );
 			}
 
-			/**
-			 * AJAX handler to process checkout.
-			 */
 			public function process_checkout() {
-                // Sanitize and retrieve form input.
                 $name          = sanitize_text_field( wp_unslash( $_POST['name'] ) );
                 $email         = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
                 $password      = isset( $_POST['password'] ) ? wp_unslash( $_POST['password'] ) : '';
                 $phone         = sanitize_text_field( wp_unslash( $_POST['phone'] ) );
                 $paymentMethod = sanitize_text_field( wp_unslash( $_POST['paymentMethod'] ) );
 
-                // Check if pickup options are enabled.
                 $enable_pickup = get_option( 'ssc_enable_pickup_options', 1 );
                 if ( $enable_pickup ) {
                     $pickup_type = sanitize_text_field( wp_unslash( $_POST['pickup_type'] ) );
+                    $pickup_date = sanitize_text_field( wp_unslash( $_POST['pickup_date'] ) );
                     $pickup_time = sanitize_text_field( wp_unslash( $_POST['pickup_time'] ) );
-                    // Since we're using datetime-local, the format is "Y-m-d\TH:i"
-                    $pickup_datetime = DateTime::createFromFormat( 'Y-m-d\TH:i', $pickup_time );
+                    $pickup_datetime_str = $pickup_date . ' ' . $pickup_time;
+                    $pickup_datetime = DateTime::createFromFormat( 'Y-m-d H:i', $pickup_datetime_str );
                     if ( ! $pickup_datetime ) {
-                        wp_send_json_error( 'Invalid pickup time format. Please use the provided date picker.' );
+                        wp_send_json_error( 'Invalid pickup date/time format. Please use the provided date and time pickers.' );
                     }
                 } else {
-                    // If pickup is disabled, set empty values.
                     $pickup_type = '';
                     $pickup_time = '';
                 }
 
-                // Get the unique identifier for the current user.
                 $uid = $this->get_user_uid();
 
                 global $wpdb;
@@ -492,55 +481,50 @@ add_action('plugins_loaded', function () {
                     wp_send_json_error( 'Cart is empty' );
                 }
 
-                // --- Global Order Controls ---
                 if ( get_option( 'ssc_global_orders_disabled', 0 ) ) {
                     wp_send_json_error( 'Online orders are currently disabled.' );
                 }
 
                 if ( $enable_pickup ) {
-                    // Retrieve global scheduling restrictions.
                     $closed_days       = array_map( 'intval', (array) get_option( 'ssc_closed_days', [] ) );
                     $after_hours_start = get_option( 'ssc_after_hours_start', '18:00' );
                     $after_hours_end   = get_option( 'ssc_after_hours_end', '08:00' );
 
-                    // Check if the selected day is closed.
-                    // DateTime::format('N') returns 1 (Mon) to 7 (Sun)
                     if ( in_array( intval( $pickup_datetime->format( 'N' ) ), $closed_days, true ) ) {
                         wp_send_json_error( 'The selected day is closed for orders.' );
                     }
 
-                    // Retrieve pickup type settings.
-                    $pickup_types = maybe_unserialize( get_option( 'ssc_pickup_types', [] ) );
-                    $min_lead_time_hours = 0;
-                    $allowed_time_blocks = [];
-
-                    if ( is_array( $pickup_types ) ) {
-                        foreach ( $pickup_types as $type ) {
-                            if ( isset( $type['name'] ) && $type['name'] === $pickup_type ) {
-                                $min_lead_time_hours = isset( $type['min_lead_time'] ) ? intval( $type['min_lead_time'] ) : 0;
-                                $allowed_time_blocks = isset( $type['time_blocks'] ) ? (array) $type['time_blocks'] : [];
+                    global $wpdb;
+                    $pickup_table = $wpdb->prefix . 'flw_pickup_types';
+                    $pickup_types_db = $wpdb->get_results("SELECT * FROM $pickup_table", ARRAY_A);
+                    $selected_pt = null;
+                    if ( is_array($pickup_types_db) ) {
+                        foreach ($pickup_types_db as $pt) {
+                            if ( isset($pt['name']) && $pt['name'] === $pickup_type ) {
+                                $selected_pt = $pt;
                                 break;
                             }
                         }
                     }
-
-                    // Enforce minimum lead time.
-                    $current_time     = new DateTime();
+                    if ( ! $selected_pt ) {
+                        wp_send_json_error( 'Invalid pickup type selected.' );
+                    }
+                    $min_lead_time_hours = isset($selected_pt['min_lead_time']) ? intval($selected_pt['min_lead_time']) : 0;
+                    $allowed_time_blocks = isset($selected_pt['time_blocks']) ? wp_json_decode($selected_pt['time_blocks'], true) : [];
+                    
+                    $current_time = new DateTime();
                     $min_allowed_time = clone $current_time;
-                    $min_allowed_time->add( new DateInterval( 'PT' . $min_lead_time_hours . 'H' ) );
+                    $min_allowed_time->add(new DateInterval('PT' . $min_lead_time_hours . 'H'));
                     if ( $pickup_datetime < $min_allowed_time ) {
                         wp_send_json_error( 'Pickup time must be at least ' . $min_lead_time_hours . ' hours from now.' );
                     }
-
-                    // Validate against allowed time blocks (if set) for the selected pickup type.
-                    // Using 3-letter day abbreviation (e.g., Mon, Tue, etc.)
-                    $day_of_week = $pickup_datetime->format( 'D' );
-                    if ( isset( $allowed_time_blocks[ $day_of_week ] ) && is_array( $allowed_time_blocks[ $day_of_week ] ) ) {
+                    
+                    $day_of_week = $pickup_datetime->format('D');
+                    if ( isset($allowed_time_blocks[$day_of_week]) && is_array($allowed_time_blocks[$day_of_week]) ) {
                         $is_valid_time = false;
-                        foreach ( $allowed_time_blocks[ $day_of_week ] as $time_range ) {
-                            // Expect time_range to be in "HH:MM-HH:MM" format.
-                            list( $start, $end ) = explode( '-', $time_range );
-                            $pickup_time_only = $pickup_datetime->format( 'H:i' );
+                        foreach ( $allowed_time_blocks[$day_of_week] as $time_range ) {
+                            list( $start, $end ) = explode('-', $time_range );
+                            $pickup_time_only = $pickup_datetime->format('H:i');
                             if ( $pickup_time_only >= $start && $pickup_time_only <= $end ) {
                                 $is_valid_time = true;
                                 break;
@@ -552,8 +536,6 @@ add_action('plugins_loaded', function () {
                     }
                 }
 
-                // --- Payment Processing ---
-                // Calculate total order amount (in dollars), then convert to cents.
                 $total = 0;
                 foreach ( $items as $item ) {
                     $total += floatval( $item->product_price ) * intval( $item->quantity );
@@ -565,12 +547,10 @@ add_action('plugins_loaded', function () {
                     wp_send_json_error( 'Stripe secret key not found' );
                 }
 
-                // Generate a unique order ID.
                 $order_id = 'ORDER-' . time();
 
-                // Create and confirm a PaymentIntent using the Stripe API.
                 $ch = curl_init( 'https://api.stripe.com/v1/payment_intents' );
-                $return_url = site_url( '/checkout' ); // Return URL for any required redirects.
+                $return_url = site_url( '/checkout' );
                 $intent_data = http_build_query( [
                     'amount'              => $amount,
                     'currency'            => 'usd',
@@ -593,7 +573,6 @@ add_action('plugins_loaded', function () {
                     wp_send_json_error( 'Stripe PaymentIntent error: ' . $intent_result['error']['message'] );
                 }
 
-                // --- User Creation (for guest checkout) ---
                 if ( ! is_user_logged_in() ) {
                     if ( email_exists( $email ) === false ) {
                         $user_id = wp_create_user( $email, $password, $email );
@@ -603,7 +582,6 @@ add_action('plugins_loaded', function () {
                     }
                 }
 
-                // --- Send Order Email ---
                 $admin_email = get_option( 'ssc_order_admin_email' );
                 if ( ! $admin_email ) {
                     $admin_email = get_option( 'admin_email' );
@@ -620,7 +598,7 @@ add_action('plugins_loaded', function () {
                 }
                 if ( $enable_pickup ) {
                     $message .= "Pickup Type: " . $pickup_type . "\n";
-                    $message .= "Pickup Time: " . $pickup_time . "\n";
+                    $message .= "Pickup Time: " . $pickup_date . " " . $pickup_time . "\n";
                 }
                 $message .= "\nOrder Details:\n";
                 foreach ( $items as $item ) {
@@ -628,7 +606,6 @@ add_action('plugins_loaded', function () {
                 }
                 wp_mail( $admin_email, $subject, $message );
 
-                // --- Record Order History ---
                 foreach ( $items as $item ) {
                     $wpdb->insert( $order_table, [
                         'uid'           => $uid,
@@ -640,15 +617,11 @@ add_action('plugins_loaded', function () {
                     ] );
                 }
 
-                // --- Clear the Shopping Cart ---
                 $wpdb->delete( $cart_table, [ 'uid' => $uid ] );
 
                 wp_send_json_success( 'Payment successful and order processed. Order Number: ' . $order_id );
             }
 
-			/**
-			 * Renders the Stripe Transactions admin page.
-			 */
 			public function render_stripe_transactions_page() {
 				$stripe_secret = get_option( 'flw_stripe_secret_key' );
 				if ( ! $stripe_secret ) {
@@ -709,9 +682,6 @@ add_action('plugins_loaded', function () {
 				echo '</tbody></table></div>';
 			}
 
-			/**
-			 * Renders the Order Details admin page.
-			 */
 			public function render_order_details_page() {
 				if ( ! isset( $_GET['order_id'] ) ) {
 					echo '<div class="wrap"><h1>Order Details</h1><p>No order selected.</p></div>';
@@ -753,23 +723,17 @@ add_action('plugins_loaded', function () {
 				echo '</div>';
 			}
 
-			/**
-			 * Registers admin submenu pages.
-			 */
 			public function register_submenu() {
-				// Settings page.
 				FLW_Plugin_Library::add_submenu(
 					'Shopping Cart Settings',
 					'simple-shopping-cart',
 					[ $this, 'render_settings_page' ]
 				);
-				// Order Details page.
 				FLW_Plugin_Library::add_submenu(
 					'Order Details',
 					'simple-shopping-cart-order-details',
 					[ $this, 'render_order_details_page' ]
 				);
-				// Stripe Transactions page.
 				FLW_Plugin_Library::add_submenu(
 					'Stripe Transactions',
 					'simple-shopping-cart-transactions',
@@ -777,16 +741,9 @@ add_action('plugins_loaded', function () {
 				);
 			}
 
-			/**
-			 * Renders the plugin settings page.
-			 */
 			public function render_settings_page() {
-                // Process form submission.
                 if ( isset( $_POST['ssc_save_settings'] ) ) {
-                    // Save the admin email.
                     update_option( 'ssc_order_admin_email', sanitize_email( wp_unslash( $_POST['order_admin_email'] ) ) );
-                    
-                    // Process store hours input.
                     if ( isset( $_POST['store_hours'] ) && is_array( $_POST['store_hours'] ) ) {
                         $store_hours = [];
                         foreach ( $_POST['store_hours'] as $day => $data ) {
@@ -798,33 +755,54 @@ add_action('plugins_loaded', function () {
                         }
                         update_option( 'ssc_store_hours', $store_hours );
                     }
-                    
-                    // Process pickup types input from the new menu interface.
                     if ( isset($_POST['pickup_types']) && is_array($_POST['pickup_types']) ) {
-                        // Encode the array as JSON for storage.
-                        $pickup_types_array = $_POST['pickup_types'];
-                        update_option( 'ssc_pickup_types', json_encode($pickup_types_array) );
+                        global $wpdb;
+                        $pickup_table = $wpdb->prefix . 'flw_pickup_types';
+                        $wpdb->query("TRUNCATE TABLE $pickup_table");
+                        foreach ($_POST['pickup_types'] as $pt) {
+                            $time_blocks = array();
+                            if ( isset($pt['time_blocks']) && is_array($pt['time_blocks']) ) {
+                                foreach ( $pt['time_blocks'] as $day => $blocks_str ) {
+                                    $blocks = array();
+                                    $parts = explode(',', $blocks_str);
+                                    foreach ($parts as $p) {
+                                        $p = trim($p);
+                                        if (!empty($p)) {
+                                            $blocks[] = $p;
+                                        }
+                                    }
+                                    $time_blocks[$day] = $blocks;
+                                }
+                            }
+                            $data = array(
+                                'name'         => sanitize_text_field($pt['name']),
+                                'min_lead_time'=> intval($pt['min_lead_time']),
+                                'time_blocks'  => wp_json_encode($time_blocks),
+                                'created_at'   => current_time('mysql'),
+                            );
+                            $wpdb->insert($pickup_table, $data);
+                        }
                     }
-                    
-                    // Process the pickup options toggle.
                     $enable_pickup = isset( $_POST['ssc_enable_pickup_options'] ) ? 1 : 0;
                     update_option( 'ssc_enable_pickup_options', $enable_pickup );
-                    
                     echo '<div class="updated"><p>Settings saved.</p></div>';
                 }
-                
-                // Retrieve saved settings.
                 $order_admin_email = get_option( 'ssc_order_admin_email', get_option( 'admin_email' ) );
-                $store_hours       = maybe_unserialize( get_option( 'ssc_store_hours', [] ) );
-                // Retrieve pickup types JSON and decode into an array.
-                $pickup_types_json = get_option( 'ssc_pickup_types', '[]' );
-                $pickup_types      = json_decode( $pickup_types_json, true );
-                if ( ! is_array( $pickup_types ) ) {
-                    $pickup_types = array();
+                $store_hours = maybe_unserialize( get_option( 'ssc_store_hours', [] ) );
+                global $wpdb;
+                $pickup_table = $wpdb->prefix . 'flw_pickup_types';
+                $pickup_types = $wpdb->get_results("SELECT * FROM $pickup_table", ARRAY_A);
+                if( is_array($pickup_types) ) {
+                    foreach($pickup_types as &$pt) {
+                        $blocks = wp_json_decode($pt['time_blocks'], true);
+                        foreach ($blocks as $day => $arr) {
+                            $blocks[$day] = implode(', ', $arr);
+                        }
+                        $pt['time_blocks'] = $blocks;
+                    }
+                    unset($pt);
                 }
                 $enable_pickup = get_option( 'ssc_enable_pickup_options', 1 );
-                
-                // Define days of the week.
                 $days = array(
                     'sunday'    => 'Sunday',
                     'monday'    => 'Monday',
@@ -834,28 +812,10 @@ add_action('plugins_loaded', function () {
                     'friday'    => 'Friday',
                     'saturday'  => 'Saturday',
                 );
-                
-                // If no pickup types are stored, create one default empty block.
-                if ( empty( $pickup_types ) ) {
-                    $pickup_types[] = array(
-                        'name' => '',
-                        'min_lead_time' => 0,
-                        'time_blocks' => array(
-                            'sunday'    => '',
-                            'monday'    => '',
-                            'tuesday'   => '',
-                            'wednesday' => '',
-                            'thursday'  => '',
-                            'friday'    => '',
-                            'saturday'  => '',
-                        )
-                    );
-                }
                 ?>
                 <div class="wrap">
                     <h1>Shopping Cart Settings</h1>
                     <form method="post" action="">
-                        <!-- Admin Email -->
                         <table class="form-table">
                             <tr>
                                 <th scope="row">
@@ -867,7 +827,6 @@ add_action('plugins_loaded', function () {
                             </tr>
                         </table>
                         <hr>
-                        <!-- General Checkout Settings -->
                         <h2>General Checkout Settings</h2>
                         <p>
                             <label>
@@ -876,7 +835,6 @@ add_action('plugins_loaded', function () {
                             </label>
                         </p>
                         <hr>
-                        <!-- Store Hours -->
                         <h2>Store Hours</h2>
                         <p>
                             Set the open and close times for each day using the browser’s native time picker.
@@ -916,7 +874,6 @@ add_action('plugins_loaded', function () {
                             </tbody>
                         </table>
                         <hr>
-                        <!-- Pickup Types Management -->
                         <h2>Pickup Types Management</h2>
                         <p>
                             Define the pickup types for your orders. Each pickup type includes:
@@ -930,51 +887,50 @@ add_action('plugins_loaded', function () {
                         <div id="pickup-types-container">
                             <?php
                             $index = 0;
-                            foreach ( $pickup_types as $pt ) :
-                                ?>
-                                <div class="pickup-type" data-index="<?php echo esc_attr( $index ); ?>" style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
-                                    <h3>Pickup Type <?php echo ($index + 1); ?></h3>
-                                    <label>
-                                        Name:
-                                        <input type="text" name="pickup_types[<?php echo $index; ?>][name]" value="<?php echo esc_attr( $pt['name'] ); ?>" required>
-                                    </label>
-                                    <br>
-                                    <label>
-                                        Minimum Lead Time (hours):
-                                        <input type="number" name="pickup_types[<?php echo $index; ?>][min_lead_time]" value="<?php echo esc_attr( $pt['min_lead_time'] ); ?>" min="0" required>
-                                    </label>
-                                    <br>
-                                    <table class="widefat">
-                                        <thead>
-                                            <tr>
-                                                <th>Day</th>
-                                                <th>Allowed Time Blocks (comma separated)</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <?php foreach ( $days as $day_key => $day_name ): 
-                                                // If time blocks are stored as an array, join them with commas; otherwise use the raw value.
-                                                $tb = '';
-                                                if ( isset( $pt['time_blocks'][ $day_key ] ) ) {
-                                                    if ( is_array( $pt['time_blocks'][ $day_key ] ) ) {
-                                                        $tb = implode( ',', $pt['time_blocks'][ $day_key ] );
-                                                    } else {
-                                                        $tb = $pt['time_blocks'][ $day_key ];
-                                                    }
+                            foreach ( $pickup_types as $pt ):
+                            ?>
+                            <div class="pickup-type" data-index="<?php echo esc_attr( $index ); ?>" style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
+                                <h3>Pickup Type <?php echo ($index + 1); ?></h3>
+                                <label>
+                                    Name:
+                                    <input type="text" name="pickup_types[<?php echo $index; ?>][name]" value="<?php echo esc_attr( $pt['name'] ); ?>" required>
+                                </label>
+                                <br>
+                                <label>
+                                    Minimum Lead Time (hours):
+                                    <input type="number" name="pickup_types[<?php echo $index; ?>][min_lead_time]" value="<?php echo esc_attr( $pt['min_lead_time'] ); ?>" min="0" required>
+                                </label>
+                                <br>
+                                <table class="widefat">
+                                    <thead>
+                                        <tr>
+                                            <th>Day</th>
+                                            <th>Allowed Time Blocks (comma separated)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ( $days as $day_key => $day_name ): 
+                                            $tb = '';
+                                            if ( isset( $pt['time_blocks'][ $day_key ] ) ) {
+                                                if ( is_array( $pt['time_blocks'][ $day_key ] ) ) {
+                                                    $tb = implode( ',', $pt['time_blocks'][ $day_key ] );
+                                                } else {
+                                                    $tb = $pt['time_blocks'][ $day_key ];
                                                 }
-                                                ?>
-                                                <tr>
-                                                    <td><?php echo esc_html( $day_name ); ?></td>
-                                                    <td>
-                                                        <input type="text" name="pickup_types[<?php echo $index; ?>][time_blocks][<?php echo esc_attr( $day_key ); ?>]" value="<?php echo esc_attr( $tb ); ?>" placeholder="e.g., 08:00-10:00">
-                                                    </td>
-                                                </tr>
-                                            <?php endforeach; ?>
-                                        </tbody>
-                                    </table>
-                                    <button type="button" class="remove-pickup-type">Remove This Pickup Type</button>
-                                </div>
-                                <?php
+                                            }
+                                        ?>
+                                        <tr>
+                                            <td><?php echo esc_html( $day_name ); ?></td>
+                                            <td>
+                                                <input type="text" name="pickup_types[<?php echo $index; ?>][time_blocks][<?php echo esc_attr( $day_key ); ?>]" value="<?php echo esc_attr( $tb ); ?>" placeholder="e.g., 08:00-10:00">
+                                            </td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                                <button type="button" class="remove-pickup-type">Remove This Pickup Type</button>
+                            </div>
+                            <?php
                                 $index++;
                             endforeach;
                             ?>
@@ -984,6 +940,12 @@ add_action('plugins_loaded', function () {
                         <?php submit_button( 'Save Settings', 'primary', 'ssc_save_settings' ); ?>
                     </form>
                 </div>
+                <form method="post" action="">
+                    <h2>Upgrade Database Structure</h2>
+                    <p>If you have updated the plugin and need to upgrade the database structure, click the button below.</p>
+                    <?php wp_nonce_field( 'upgrade_db_action', 'upgrade_db_nonce' ); ?>
+                    <?php submit_button( 'Upgrade Database Structure', 'secondary', 'upgrade_db' ); ?>
+                </form>
                 <script>
                 jQuery(document).ready(function($){
                     var pickupIndex = <?php echo $index; ?>;
@@ -1049,15 +1011,12 @@ add_action('plugins_loaded', function () {
                 });
                 </script>
                 <?php
-            }
-            
+			}
 		}
 
-		// Initialize the plugin.
 		new SimpleShoppingCart_Plugin();
 
 	} else {
-		// Show an admin notice if the FLW Plugin Library is not active.
 		add_action( 'admin_notices', function () {
 			echo '<div class="notice notice-error"><p>The FLW Plugin Library must be activated for Simple Shopping Cart to work.</p></div>';
 		});
