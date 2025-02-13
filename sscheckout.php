@@ -799,10 +799,11 @@ add_action('plugins_loaded', function () {
                         update_option( 'ssc_store_hours', $store_hours );
                     }
                     
-                    // Process pickup types input.
-                    if ( isset( $_POST['ssc_pickup_types'] ) ) {
-                        // Save the raw JSON data.
-                        update_option( 'ssc_pickup_types', maybe_serialize( wp_unslash( $_POST['ssc_pickup_types'] ) ) );
+                    // Process pickup types input from the new menu interface.
+                    if ( isset($_POST['pickup_types']) && is_array($_POST['pickup_types']) ) {
+                        // Encode the array as JSON for storage.
+                        $pickup_types_array = $_POST['pickup_types'];
+                        update_option( 'ssc_pickup_types', json_encode($pickup_types_array) );
                     }
                     
                     // Process the pickup options toggle.
@@ -815,10 +816,16 @@ add_action('plugins_loaded', function () {
                 // Retrieve saved settings.
                 $order_admin_email = get_option( 'ssc_order_admin_email', get_option( 'admin_email' ) );
                 $store_hours       = maybe_unserialize( get_option( 'ssc_store_hours', [] ) );
-                $pickup_types      = maybe_unserialize( get_option( 'ssc_pickup_types', [] ) );
+                // Retrieve pickup types JSON and decode into an array.
+                $pickup_types_json = get_option( 'ssc_pickup_types', '[]' );
+                $pickup_types      = json_decode( $pickup_types_json, true );
+                if ( ! is_array( $pickup_types ) ) {
+                    $pickup_types = array();
+                }
+                $enable_pickup = get_option( 'ssc_enable_pickup_options', 1 );
                 
                 // Define days of the week.
-                $days = [
+                $days = array(
                     'sunday'    => 'Sunday',
                     'monday'    => 'Monday',
                     'tuesday'   => 'Tuesday',
@@ -826,21 +833,29 @@ add_action('plugins_loaded', function () {
                     'thursday'  => 'Thursday',
                     'friday'    => 'Friday',
                     'saturday'  => 'Saturday',
-                ];
+                );
                 
-                // Prepare the pretty printed JSON for pickup types.
-                $pickup_types_raw = get_option( 'ssc_pickup_types', '[]' );
-                $pickup_types_data = maybe_unserialize( $pickup_types_raw );
-                $decoded = json_decode( $pickup_types_data, true );
-                if ( $decoded ) {
-                    $pickup_types_pretty = json_encode( $decoded, JSON_PRETTY_PRINT );
-                } else {
-                    $pickup_types_pretty = $pickup_types_data;
+                // If no pickup types are stored, create one default empty block.
+                if ( empty( $pickup_types ) ) {
+                    $pickup_types[] = array(
+                        'name' => '',
+                        'min_lead_time' => 0,
+                        'time_blocks' => array(
+                            'sunday'    => '',
+                            'monday'    => '',
+                            'tuesday'   => '',
+                            'wednesday' => '',
+                            'thursday'  => '',
+                            'friday'    => '',
+                            'saturday'  => '',
+                        )
+                    );
                 }
                 ?>
                 <div class="wrap">
                     <h1>Shopping Cart Settings</h1>
                     <form method="post" action="">
+                        <!-- Admin Email -->
                         <table class="form-table">
                             <tr>
                                 <th scope="row">
@@ -852,14 +867,16 @@ add_action('plugins_loaded', function () {
                             </tr>
                         </table>
                         <hr>
+                        <!-- General Checkout Settings -->
                         <h2>General Checkout Settings</h2>
                         <p>
                             <label>
-                                <input type="checkbox" name="ssc_enable_pickup_options" value="1" <?php checked( get_option('ssc_enable_pickup_options', 1), 1 ); ?>>
+                                <input type="checkbox" name="ssc_enable_pickup_options" value="1" <?php checked( $enable_pickup, 1 ); ?>>
                                 Enable Pickup Options on Checkout
                             </label>
                         </p>
                         <hr>
+                        <!-- Store Hours -->
                         <h2>Store Hours</h2>
                         <p>
                             Set the open and close times for each day using the browser’s native time picker.
@@ -899,32 +916,141 @@ add_action('plugins_loaded', function () {
                             </tbody>
                         </table>
                         <hr>
+                        <!-- Pickup Types Management -->
                         <h2>Pickup Types Management</h2>
                         <p>
-                            Define pickup types as a JSON array. Each pickup type should include a name, a minimum lead time (in hours), and time blocks for each day.
-                            For example:
+                            Define the pickup types for your orders. Each pickup type includes:
+                            <br>
+                            - <strong>Name</strong>
+                            <br>
+                            - <strong>Minimum Lead Time</strong> (in hours)
+                            <br>
+                            - <strong>Allowed Time Blocks</strong> for each day (enter one or more time blocks in the format <code>HH:MM-HH:MM</code>, separated by commas)
                         </p>
-                        <pre>
-[{
-    "name": "Bakery Orders",
-    "min_lead_time": 24,
-    "time_blocks": {
-        "1": ["09:00-12:00", "13:00-16:00"],
-        "2": ["09:00-12:00", "13:00-16:00"],
-        "3": ["09:00-12:00", "13:00-16:00"],
-        "4": ["09:00-12:00", "13:00-16:00"],
-        "5": ["09:00-12:00", "13:00-16:00"],
-        "6": ["10:00-14:00"],
-        "7": []
-    }
-}]
-                        </pre>
-                        <textarea name="ssc_pickup_types" rows="8" cols="50" placeholder='Enter pickup types as JSON...'><?php echo esc_textarea( $pickup_types_pretty ); ?></textarea>
+                        <div id="pickup-types-container">
+                            <?php
+                            $index = 0;
+                            foreach ( $pickup_types as $pt ) :
+                                ?>
+                                <div class="pickup-type" data-index="<?php echo esc_attr( $index ); ?>" style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
+                                    <h3>Pickup Type <?php echo ($index + 1); ?></h3>
+                                    <label>
+                                        Name:
+                                        <input type="text" name="pickup_types[<?php echo $index; ?>][name]" value="<?php echo esc_attr( $pt['name'] ); ?>" required>
+                                    </label>
+                                    <br>
+                                    <label>
+                                        Minimum Lead Time (hours):
+                                        <input type="number" name="pickup_types[<?php echo $index; ?>][min_lead_time]" value="<?php echo esc_attr( $pt['min_lead_time'] ); ?>" min="0" required>
+                                    </label>
+                                    <br>
+                                    <table class="widefat">
+                                        <thead>
+                                            <tr>
+                                                <th>Day</th>
+                                                <th>Allowed Time Blocks (comma separated)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php foreach ( $days as $day_key => $day_name ): 
+                                                // If time blocks are stored as an array, join them with commas; otherwise use the raw value.
+                                                $tb = '';
+                                                if ( isset( $pt['time_blocks'][ $day_key ] ) ) {
+                                                    if ( is_array( $pt['time_blocks'][ $day_key ] ) ) {
+                                                        $tb = implode( ',', $pt['time_blocks'][ $day_key ] );
+                                                    } else {
+                                                        $tb = $pt['time_blocks'][ $day_key ];
+                                                    }
+                                                }
+                                                ?>
+                                                <tr>
+                                                    <td><?php echo esc_html( $day_name ); ?></td>
+                                                    <td>
+                                                        <input type="text" name="pickup_types[<?php echo $index; ?>][time_blocks][<?php echo esc_attr( $day_key ); ?>]" value="<?php echo esc_attr( $tb ); ?>" placeholder="e.g., 08:00-10:00">
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                    <button type="button" class="remove-pickup-type">Remove This Pickup Type</button>
+                                </div>
+                                <?php
+                                $index++;
+                            endforeach;
+                            ?>
+                        </div>
+                        <button type="button" id="add-pickup-type">Add Pickup Type</button>
+                        <hr>
                         <?php submit_button( 'Save Settings', 'primary', 'ssc_save_settings' ); ?>
                     </form>
                 </div>
+                <script>
+                jQuery(document).ready(function($){
+                    var pickupIndex = <?php echo $index; ?>;
+                    $("#add-pickup-type").click(function(){
+                        var newBlock = `
+                        <div class="pickup-type" data-index="` + pickupIndex + `" style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
+                            <h3>Pickup Type ` + (pickupIndex + 1) + `</h3>
+                            <label>
+                                Name: <input type="text" name="pickup_types[` + pickupIndex + `][name]" value="" required>
+                            </label>
+                            <br>
+                            <label>
+                                Minimum Lead Time (hours): <input type="number" name="pickup_types[` + pickupIndex + `][min_lead_time]" value="0" min="0" required>
+                            </label>
+                            <br>
+                            <table class="widefat">
+                                <thead>
+                                    <tr>
+                                        <th>Day</th>
+                                        <th>Allowed Time Blocks (comma separated)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Sunday</td>
+                                        <td><input type="text" name="pickup_types[` + pickupIndex + `][time_blocks][sunday]" placeholder="e.g., 08:00-10:00"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Monday</td>
+                                        <td><input type="text" name="pickup_types[` + pickupIndex + `][time_blocks][monday]" placeholder="e.g., 08:00-10:00"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Tuesday</td>
+                                        <td><input type="text" name="pickup_types[` + pickupIndex + `][time_blocks][tuesday]" placeholder="e.g., 08:00-10:00"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Wednesday</td>
+                                        <td><input type="text" name="pickup_types[` + pickupIndex + `][time_blocks][wednesday]" placeholder="e.g., 08:00-10:00"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Thursday</td>
+                                        <td><input type="text" name="pickup_types[` + pickupIndex + `][time_blocks][thursday]" placeholder="e.g., 08:00-10:00"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Friday</td>
+                                        <td><input type="text" name="pickup_types[` + pickupIndex + `][time_blocks][friday]" placeholder="e.g., 08:00-10:00"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Saturday</td>
+                                        <td><input type="text" name="pickup_types[` + pickupIndex + `][time_blocks][saturday]" placeholder="e.g., 08:00-10:00"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <button type="button" class="remove-pickup-type">Remove This Pickup Type</button>
+                        </div>`;
+                        $("#pickup-types-container").append(newBlock);
+                        pickupIndex++;
+                    });
+                    
+                    $(document).on("click", ".remove-pickup-type", function(){
+                        $(this).closest(".pickup-type").remove();
+                    });
+                });
+                </script>
                 <?php
-			}
+            }
+            
 		}
 
 		// Initialize the plugin.
