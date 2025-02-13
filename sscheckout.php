@@ -504,6 +504,7 @@ add_action('plugins_loaded', function () {
                     $closed_days       = array_map( 'intval', (array) get_option( 'ssc_closed_days', [] ) );
                     $after_hours_start = get_option( 'ssc_after_hours_start', '18:00' );
                     $after_hours_end   = get_option( 'ssc_after_hours_end', '08:00' );
+                    var_dump($closed_days);
 
                     if ( in_array( intval( $pickup_datetime->format( 'N' ) ), $closed_days, true ) ) {
                         wp_send_json_error( 'The selected day is closed for orders.' );
