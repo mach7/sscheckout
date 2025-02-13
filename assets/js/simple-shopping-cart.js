@@ -1,30 +1,11 @@
 jQuery(document).ready(function($) {
-    // Initialize the date/time picker on the pickup_time field.
-    if ($("#pickup_time").length) {
-        $("#pickup_time").datetimepicker({
-            dateFormat: "yy-mm-dd",
-            timeFormat: "HH:mm",
-            // Optionally, disable closed days (pass these values via wp_localize_script)
-            beforeShowDay: function(date) {
-                // Example: disable weekends (Saturday=6, Sunday=0)
-                var day = date.getDay();
-                // If you have a global array of closed days from PHP (e.g., [6,0]), you can disable them.
-                var closedDays = sscGlobalSettings.closedDays || [];
-                if ( $.inArray(day, closedDays) !== -1 ) {
-                    return [false, "", "Closed"];
-                }
-                return [true, ""];
-            }
-        });
-    }
-    // If #card-element exists, initialize Stripe elements for the checkout form.
-    var cardElementDiv = document.getElementById('card-element');
-    if (cardElementDiv) {
-        // Initialize Stripe with your publishable key passed via wp_localize_script.
+    /***** Stripe Checkout Integration *****/
+    if ($('#card-element').length) {
+        // Initialize Stripe
         var stripe = Stripe(sscheckout_params.publishableKey);
         var elements = stripe.elements();
-
-        // Custom styling for the Stripe Element.
+        
+        // Custom styling for the Stripe card element.
         var style = {
             base: {
                 color: "#32325d",
@@ -40,85 +21,90 @@ jQuery(document).ready(function($) {
                 iconColor: "#fa755a"
             }
         };
-
-        // Create the card Element and mount it.
+        
+        // Create and mount the card element.
         var card = elements.create("card", { style: style });
-        card.mount(cardElementDiv);
-
-        // Handle real-time validation errors from the card Element.
-        card.on("change", function (event) {
-            var displayError = document.getElementById("card-errors");
+        card.mount("#card-element");
+        
+        // Handle real-time validation errors.
+        card.on("change", function(event) {
+            var displayError = $("#card-errors");
             if (event.error) {
-                displayError.textContent = event.error.message;
+                displayError.text(event.error.message);
             } else {
-                displayError.textContent = "";
+                displayError.text("");
             }
         });
-
-        // Handle checkout form submission.
-        $("#ss-checkout-form").submit(function (e) {
+        
+        // Checkout form submission.
+        $("#ss-checkout-form").submit(function(e) {
             e.preventDefault();
-            // Disable the submit button to prevent repeated clicks.
+            // Disable the submit button to prevent multiple clicks.
             $(this).find('button[type="submit"]').prop("disabled", true);
-
-            stripe
-                .createPaymentMethod({
-                    type: "card",
-                    card: card,
-                    billing_details: {
+            
+            stripe.createPaymentMethod({
+                type: "card",
+                card: card,
+                billing_details: {
+                    name: $("input[name='name']").val(),
+                    email: $("input[name='email']").val(),
+                    phone: $("input[name='phone']").val()
+                }
+            }).then(function(result) {
+                if (result.error) {
+                    $("#card-errors").text(result.error.message);
+                    $("#ss-checkout-form").find('button[type="submit"]').prop("disabled", false);
+                } else {
+                    var paymentMethod = result.paymentMethod.id;
+                    var formData = {
+                        action: "ssc_checkout",
                         name: $("input[name='name']").val(),
                         email: $("input[name='email']").val(),
-                        phone: $("input[name='phone']").val()
-                    }
-                })
-                .then(function (result) {
-                    if (result.error) {
-                        $("#card-errors").text(result.error.message);
-                        $("#ss-checkout-form").find('button[type="submit"]').prop("disabled", false);
-                    } else {
-                        // Send the PaymentMethod ID to your server.
-                        var paymentMethod = result.paymentMethod.id;
-                        var formData = {
-                            action: "ssc_checkout",
-                            name: $("input[name='name']").val(),
-                            email: $("input[name='email']").val(),
-                            password: $("input[name='password']").val(),
-                            phone: $("input[name='phone']").val(),
-                            paymentMethod: paymentMethod
-                        };
-                        $.post(sscheckout_params.ajax_url, formData, function (response) {
-                            if (response.success) {
-                                $("#ss-checkout-response").html("<p>" + response.data + "</p>");
-                                // Reload the page after 2 seconds to clear the cart.
-                                setTimeout(function() {
-                                    location.reload();
-                                }, 2000);
-                            } else {
-                                $("#ss-checkout-response").html("<p>Error: " + response.data + "</p>");
-                                $("#ss-checkout-form").find('button[type="submit"]').prop("disabled", false);
-                            }
-                        });
-                    }
-                });
+                        password: $("input[name='password']").val(),
+                        phone: $("input[name='phone']").val(),
+                        paymentMethod: paymentMethod,
+                        pickup_type: $("#pickup_type").val(),  // Ensure your checkout form includes a select with id="pickup_type"
+                        pickup_time: $("#pickup_time").val()   // And an input with id="pickup_time"
+                    };
+                    $.post(sscheckout_params.ajax_url, formData, function(response) {
+                        if (response.success) {
+                            $("#ss-checkout-response").html("<p>" + response.data + "</p>");
+                            // Reload the page after a brief pause.
+                            setTimeout(function() {
+                                location.reload();
+                            }, 2000);
+                        } else {
+                            $("#ss-checkout-response").html("<p>Error: " + response.data + "</p>");
+                            $("#ss-checkout-form").find('button[type="submit"]').prop("disabled", false);
+                        }
+                    });
+                }
+            });
         });
-    } // End if cardElementDiv exists
-
-    // Bind the "Add to Cart" click event (works on all pages).
-    $(".ssc-add-to-cart").on("click", function (e) {
+    }
+    
+    /***** Pickup Time Field *****/
+    // If you're using a native HTML5 time input, no additional JS initialization is needed.
+    // Example HTML for pickup time in your checkout form:
+    // <input type="time" name="pickup_time" id="pickup_time" required>
+    //
+    // If you require a combined date/time picker with a 12-hour format,
+    // consider enqueuing a dedicated JS library (such as Tempus Dominus or similar).
+    
+    /***** Cart Update Functionality *****/
+    // Add to Cart.
+    $(".ssc-add-to-cart").on("click", function(e) {
         e.preventDefault();
         var $productElem = $(this).closest(".ssc-product");
         var productName = $productElem.data("product");
         var productPrice = $productElem.data("price");
-
-        // Send an AJAX request to add the product to the cart.
         $.post(sscheckout_params.ajax_url, {
             action: "ssc_update_cart",
             product: productName,
             action_type: "add",
             price: productPrice
-        }, function (response) {
+        }, function(response) {
             if (response.success) {
-                // Update the UI to show the new quantity.
                 $productElem.html(
                     '<button class="ssc-minus" data-action="minus">–</button> ' +
                     '<span class="ssc-quantity">' + response.data.quantity + '</span> ' +
@@ -130,9 +116,9 @@ jQuery(document).ready(function($) {
             }
         });
     });
-
-    // Bind event for increasing the quantity.
-    $(document).on("click", ".ssc-plus", function (e) {
+    
+    // Increase quantity.
+    $(document).on("click", ".ssc-plus", function(e) {
         e.preventDefault();
         var $element = $(this).closest(".ssc-product, tr[data-product]");
         var productName = $element.data("product");
@@ -140,7 +126,7 @@ jQuery(document).ready(function($) {
             action: "ssc_update_cart",
             product: productName,
             action_type: "plus"
-        }, function (response) {
+        }, function(response) {
             if (response.success) {
                 if ($element.is("tr")) {
                     $element.find(".ssc-item-quantity").text(response.data.quantity);
@@ -152,9 +138,9 @@ jQuery(document).ready(function($) {
             }
         });
     });
-
-    // Bind event for decreasing the quantity.
-    $(document).on("click", ".ssc-minus", function (e) {
+    
+    // Decrease quantity.
+    $(document).on("click", ".ssc-minus", function(e) {
         e.preventDefault();
         var $element = $(this).closest(".ssc-product, tr[data-product]");
         var productName = $element.data("product");
@@ -162,7 +148,7 @@ jQuery(document).ready(function($) {
             action: "ssc_update_cart",
             product: productName,
             action_type: "minus"
-        }, function (response) {
+        }, function(response) {
             if (response.success) {
                 if ($element.is("tr")) {
                     $element.find(".ssc-item-quantity").text(response.data.quantity);
@@ -174,9 +160,9 @@ jQuery(document).ready(function($) {
             }
         });
     });
-
-    // Bind event for removing the item from the cart.
-    $(document).on("click", ".ssc-remove", function (e) {
+    
+    // Remove item from cart.
+    $(document).on("click", ".ssc-remove", function(e) {
         e.preventDefault();
         var $element = $(this).closest(".ssc-product, tr[data-product]");
         var productName = $element.data("product");
@@ -184,9 +170,8 @@ jQuery(document).ready(function($) {
             action: "ssc_update_cart",
             product: productName,
             action_type: "remove"
-        }, function (response) {
+        }, function(response) {
             if (response.success) {
-                // Remove the element from the UI.
                 $element.remove();
             } else {
                 console.log("Error updating cart (remove): " + response.data);
