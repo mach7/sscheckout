@@ -321,8 +321,29 @@ add_action('plugins_loaded', function () {
                     <h2>Your Cart</h2>
                     <?php if ( $items ) : ?>
                         <table class="ssc-cart-table">
-                            <!-- existing table markup -->
-                        </table>
+							<thead>
+								<tr>
+									<th>Product</th>
+									<th>Price</th>
+									<th>Quantity</th>
+									<th>Actions</th>
+								</tr>
+							</thead>
+							<tbody>
+								<?php foreach ( $items as $item ) : ?>
+									<tr data-product="<?php echo esc_attr( $item->product_name ); ?>">
+										<td><?php echo esc_html( $item->product_name ); ?></td>
+										<td><?php echo esc_html( $item->product_price ); ?></td>
+										<td class="ssc-item-quantity"><?php echo intval( $item->quantity ); ?></td>
+										<td>
+											<button class="ssc-minus" data-action="minus">–</button>
+											<button class="ssc-plus" data-action="plus">+</button>
+											<button class="ssc-remove" data-action="remove">🗑️</button>
+										</td>
+									</tr>
+								<?php endforeach; ?>
+							</tbody>
+						</table>
                     <?php else : ?>
                         <p>Your cart is empty.</p>
                     <?php endif; ?>
