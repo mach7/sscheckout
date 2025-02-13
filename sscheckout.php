@@ -764,7 +764,7 @@ add_action('plugins_loaded', function () {
 
 			public function render_settings_page() {
                 global $wpdb;
-            
+                
                 // Handle Upgrade Database button.
                 if ( isset($_POST['upgrade_db']) ) {
                     if ( ! isset($_POST['upgrade_db_nonce']) || ! wp_verify_nonce($_POST['upgrade_db_nonce'], 'upgrade_db_action') ) {
@@ -774,7 +774,7 @@ add_action('plugins_loaded', function () {
                         echo '<div class="updated"><p>Database upgraded successfully.</p></div>';
                     }
                 }
-            
+                
                 // Process form submission for general settings.
                 if ( isset( $_POST['ssc_save_settings'] ) ) {
                     // Save admin email.
@@ -827,6 +827,10 @@ add_action('plugins_loaded', function () {
                     $enable_pickup = isset( $_POST['ssc_enable_pickup_options'] ) ? 1 : 0;
                     update_option( 'ssc_enable_pickup_options', $enable_pickup );
                     
+                    // Process global online orders toggle.
+                    $global_orders_disabled = isset($_POST['ssc_global_orders_disabled']) ? 1 : 0;
+                    update_option( 'ssc_global_orders_disabled', $global_orders_disabled );
+                    
                     echo '<div class="updated"><p>Settings saved.</p></div>';
                 }
                 
@@ -834,11 +838,11 @@ add_action('plugins_loaded', function () {
                 $order_admin_email = get_option( 'ssc_order_admin_email', get_option( 'admin_email' ) );
                 $store_hours       = maybe_unserialize( get_option( 'ssc_store_hours', [] ) );
                 $enable_pickup     = get_option( 'ssc_enable_pickup_options', 1 );
+                $global_orders_disabled = get_option( 'ssc_global_orders_disabled', 0 );
                 
                 // Retrieve pickup types from the database.
                 $pickup_table = $wpdb->prefix . 'flw_pickup_types';
                 $pickup_types = $wpdb->get_results("SELECT * FROM $pickup_table", ARRAY_A);
-                // For display, convert stored JSON time_blocks into comma-separated strings.
                 if ( is_array($pickup_types) ) {
                     foreach($pickup_types as &$pt) {
                         $blocks = json_decode($pt['time_blocks'], true);
@@ -853,8 +857,6 @@ add_action('plugins_loaded', function () {
                     }
                     unset($pt);
                 }
-                
-                // If no pickup types exist, create a default empty block.
                 if ( empty( $pickup_types ) ) {
                     $pickup_types[] = array(
                         'id' => '',
@@ -905,6 +907,14 @@ add_action('plugins_loaded', function () {
                                 Enable Pickup Options on Checkout
                             </label>
                         </p>
+                        <!-- Online Order Controls -->
+                        <h2>Online Order Controls</h2>
+                        <p>
+                            <label>
+                                <input type="checkbox" name="ssc_global_orders_disabled" value="1" <?php checked( $global_orders_disabled, 1 ); ?>>
+                                Disable Online Orders
+                            </label>
+                        </p>
                         <hr>
                         <!-- Store Hours -->
                         <h2>Store Hours</h2>
@@ -920,17 +930,17 @@ add_action('plugins_loaded', function () {
                             </thead>
                             <tbody>
                                 <?php foreach ($days as $day_key => $day_name): 
-                                    $open_time = isset($store_hours[$day_key]['open']) ? $store_hours[$day_key]['open'] : '';
-                                    $close_time = isset($store_hours[$day_key]['close']) ? $store_hours[$day_key]['close'] : '';
-                                    $closed = isset($store_hours[$day_key]['closed']) ? $store_hours[$day_key]['closed'] : 0;
+                                    $open_time  = isset( $store_hours[ $day_key ]['open'] ) ? $store_hours[ $day_key ]['open'] : '';
+                                    $close_time = isset( $store_hours[ $day_key ]['close'] ) ? $store_hours[ $day_key ]['close'] : '';
+                                    $closed     = isset( $store_hours[ $day_key ]['closed'] ) ? $store_hours[ $day_key ]['closed'] : 0;
                                 ?>
                                 <tr>
-                                    <td><?php echo esc_html($day_name); ?></td>
-                                    <td><input type="time" name="store_hours[<?php echo esc_attr($day_key); ?>][open]" value="<?php echo esc_attr($open_time); ?>"></td>
-                                    <td><input type="time" name="store_hours[<?php echo esc_attr($day_key); ?>][close]" value="<?php echo esc_attr($close_time); ?>"></td>
+                                    <td><?php echo esc_html( $day_name ); ?></td>
+                                    <td><input type="time" name="store_hours[<?php echo esc_attr( $day_key ); ?>][open]" value="<?php echo esc_attr( $open_time ); ?>"></td>
+                                    <td><input type="time" name="store_hours[<?php echo esc_attr( $day_key ); ?>][close]" value="<?php echo esc_attr( $close_time ); ?>"></td>
                                     <td>
                                         <label>
-                                            <input type="checkbox" name="store_hours[<?php echo esc_attr($day_key); ?>][closed]" value="1" <?php checked($closed, 1); ?>>
+                                            <input type="checkbox" name="store_hours[<?php echo esc_attr( $day_key ); ?>][closed]" value="1" <?php checked( $closed, 1 ); ?>>
                                             Closed
                                         </label>
                                     </td>
@@ -951,7 +961,6 @@ add_action('plugins_loaded', function () {
                             <?php
                             $index = 0;
                             foreach ( $pickup_types as $pt ):
-                                // If the pickup type exists in the database, include its ID as a data attribute.
                                 $pickup_id_attr = !empty($pt['id']) ? ' data-pickup-id="' . esc_attr($pt['id']) . '"' : '';
                                 ?>
                                 <div class="pickup-type" data-index="<?php echo esc_attr( $index ); ?>"<?php echo $pickup_id_attr; ?> style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
@@ -975,10 +984,7 @@ add_action('plugins_loaded', function () {
                                         </thead>
                                         <tbody>
                                             <?php foreach ($days as $day_key => $day_name): 
-                                                $tb = '';
-                                                if ( isset($pt['time_blocks'][$day_key]) ) {
-                                                    $tb = $pt['time_blocks'][$day_key];
-                                                }
+                                                $tb = isset($pt['time_blocks'][$day_key]) ? $pt['time_blocks'][$day_key] : '';
                                                 ?>
                                                 <tr>
                                                     <td><?php echo esc_html($day_name); ?></td>
@@ -1097,6 +1103,7 @@ add_action('plugins_loaded', function () {
                 </script>
                 <?php
             }
+            
             public function remove_pickup_type_ajax() {
                 if ( ! current_user_can( 'manage_options' ) ) {
                     wp_send_json_error( 'Not allowed' );
