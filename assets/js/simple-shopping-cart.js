@@ -88,12 +88,15 @@ jQuery(document).ready(function($) {
     if (sscheckout_params.enable_pickup) {
         // Listen for changes on both pickup date and pickup time fields.
         $("#pickup_date, #pickup_time").on("change", function() {
+            // Clear the error message immediately.
+            $("#pickup-time-error").hide().text("");
+    
             var dateStr = $("#pickup_date").val();
             var timeStr = $("#pickup_time").val();
             
             // Ensure both fields are filled.
             if (!dateStr || !timeStr) {
-                $("#pickup-time-error").text("Please select both a date and a time.");
+                $("#pickup-time-error").hide().text("Please select both a date and a time.").fadeIn("slow");
                 $("#ss-checkout-form button[type='submit']").prop("disabled", true);
                 return;
             }
@@ -101,7 +104,7 @@ jQuery(document).ready(function($) {
             // Combine the date and time values into a complete datetime string.
             var pickupDateTime = new Date(dateStr + "T" + timeStr);
             if (isNaN(pickupDateTime)) {
-                $("#pickup-time-error").text("Invalid date/time selected.");
+                $("#pickup-time-error").hide().text("Invalid date/time selected.").fadeIn("slow");
                 $("#ss-checkout-form button[type='submit']").prop("disabled", true);
                 return;
             }
@@ -119,7 +122,7 @@ jQuery(document).ready(function($) {
                 }
             }
             if (!pickupType) {
-                $("#pickup-time-error").text("Invalid pickup type.");
+                $("#pickup-time-error").hide().text("Invalid pickup type.").fadeIn("slow");
                 $("#ss-checkout-form button[type='submit']").prop("disabled", true);
                 return;
             }
@@ -128,7 +131,7 @@ jQuery(document).ready(function($) {
             var minLeadTime = pickupType.min_lead_time; // in hours
             var minAllowedTime = new Date(now.getTime() + minLeadTime * 60 * 60 * 1000);
             if (pickupDateTime < minAllowedTime) {
-                $("#pickup-time-error").text("Pickup time must be at least " + minLeadTime + " hours from now.");
+                $("#pickup-time-error").hide().text("Pickup time must be at least " + minLeadTime + " hours from now.").fadeIn("slow");
                 $("#ss-checkout-form button[type='submit']").prop("disabled", true);
                 return;
             }
@@ -157,7 +160,7 @@ jQuery(document).ready(function($) {
                 });
             }
             if (closedDays.indexOf(dayNum) !== -1) {
-                $("#pickup-time-error").text("The selected day is closed for orders.");
+                $("#pickup-time-error").hide().text("The selected day is closed for orders.").fadeIn("slow");
                 $("#ss-checkout-form button[type='submit']").prop("disabled", true);
                 return;
             }
@@ -169,7 +172,7 @@ jQuery(document).ready(function($) {
             var allowedBlocks = pickupType.time_blocks[dayStr];
             // If there are no allowed blocks for the day, consider it closed.
             if (!allowedBlocks || allowedBlocks.length === 0) {
-                $("#pickup-time-error").text("The selected day is closed for orders.");
+                $("#pickup-time-error").hide().text("The selected day is closed for orders.").fadeIn("slow");
                 $("#ss-checkout-form button[type='submit']").prop("disabled", true);
                 return;
             } else {
@@ -185,17 +188,18 @@ jQuery(document).ready(function($) {
                     }
                 }
                 if (!valid) {
-                    $("#pickup-time-error").text("The selected pickup time is outside the allowed time blocks for " + pickupType.name + ".");
+                    $("#pickup-time-error").hide().text("The selected pickup time is outside the allowed time blocks for " + pickupType.name + ".").fadeIn("slow");
                     $("#ss-checkout-form button[type='submit']").prop("disabled", true);
                     return;
                 }
             }
             
-            // If all validations pass, clear error message and enable the submit button.
-            $("#pickup-time-error").text("");
+            // If all validations pass, fade out the error message and enable the submit button.
+            $("#pickup-time-error").fadeOut("slow");
             $("#ss-checkout-form button[type='submit']").prop("disabled", false);
         });
     }
+    
     
     
     
