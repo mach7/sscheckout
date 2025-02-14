@@ -118,29 +118,6 @@ jQuery(document).ready(function($) {
                 return;
             }
 
-            // Validate against allowed time blocks
-            var dayAbbr = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-            var dayStr = dayAbbr[dayNum - 1];
-            var allowedBlocks = pickupType.time_blocks[dayStr];
-
-            if (!allowedBlocks || allowedBlocks.length === 0) {
-                $("#pickup-time-error").hide().text("The selected day is closed for orders.").fadeIn("slow");
-                $("#ss-checkout-form button[type='submit']").prop("disabled", true);
-                return;
-            }
-
-            var timeFormatted = pickupDateTime.toTimeString().slice(0, 5); // HH:MM
-            var valid = allowedBlocks.some(range => {
-                var [start, end] = range.split('-');
-                return timeFormatted >= start && timeFormatted <= end;
-            });
-
-            if (!valid) {
-                $("#pickup-time-error").hide().text("The selected pickup time is outside the allowed time blocks for " + pickupType.name + ".").fadeIn("slow");
-                $("#ss-checkout-form button[type='submit']").prop("disabled", true);
-                return;
-            }
-
             $("#pickup-time-error").fadeOut("slow");
             $("#ss-checkout-form button[type='submit']").prop("disabled", false);
         });
@@ -159,7 +136,7 @@ jQuery(document).ready(function($) {
         }
     }
 
-    function handleCartUpdate(action, productName, price) {
+    function handleCartUpdate(action, productName, price, $element) {
         $.post(sscheckout_params.ajax_url, {
             action: "ssc_update_cart",
             product: productName,
@@ -171,9 +148,15 @@ jQuery(document).ready(function($) {
                 var newTotal = response.data.cart_total;
 
                 if (newQuantity === 0) {
-                    $("tr[data-product='" + productName + "'], .ssc-product[data-product='" + productName + "']").remove();
+                    if ($element.hasClass("ssc-product")) {
+                        $element.html(`
+                            <button class="ssc-add-to-cart">Add to Cart</button>
+                        `);
+                    } else {
+                        $element.remove();
+                    }
                 } else {
-                    updateItemQuantity($("tr[data-product='" + productName + "'], .ssc-product[data-product='" + productName + "']"), newQuantity);
+                    updateItemQuantity($element, newQuantity);
                 }
 
                 updateCartTotal(newTotal);
@@ -183,24 +166,46 @@ jQuery(document).ready(function($) {
         });
     }
 
-    $(".ssc-add-to-cart").on("click", function(e) {
+    /*** Add to Cart ***/
+    $(document).on("click", ".ssc-add-to-cart", function(e) {
         e.preventDefault();
         var $productElem = $(this).closest(".ssc-product");
         var productName = $productElem.data("product");
         var productPrice = $productElem.data("price");
-        handleCartUpdate("add", productName, productPrice);
+
+        $.post(sscheckout_params.ajax_url, {
+            action: "ssc_update_cart",
+            product: productName,
+            action_type: "add",
+            price: productPrice
+        }, function(response) {
+            if (response.success) {
+                $productElem.html(`
+                    <button class="ssc-minus" data-action="minus">–</button>
+                    <span class="ssc-quantity">${response.data.quantity}</span>
+                    <button class="ssc-plus" data-action="plus">+</button>
+                    <button class="ssc-remove" data-action="remove">🗑️</button>
+                `);
+                updateCartTotal(response.data.cart_total);
+            } else {
+                console.log("Error adding to cart: " + response.data);
+            }
+        });
     });
 
+    /*** Increase Quantity ***/
     $(document).on("click", ".ssc-plus", function(e) {
         e.preventDefault();
         handleCartUpdate("plus", $(this).closest(".ssc-product, tr[data-product]").data("product"));
     });
 
+    /*** Decrease Quantity ***/
     $(document).on("click", ".ssc-minus", function(e) {
         e.preventDefault();
         handleCartUpdate("minus", $(this).closest(".ssc-product, tr[data-product]").data("product"));
     });
 
+    /*** Remove from Cart and Restore "Add to Cart" ***/
     $(document).on("click", ".ssc-remove", function(e) {
         e.preventDefault();
         handleCartUpdate("remove", $(this).closest(".ssc-product, tr[data-product]").data("product"));
