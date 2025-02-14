@@ -442,53 +442,58 @@ add_action('plugins_loaded', function () {
 			}
 
 			public function update_cart() {
-				if ( empty( $_POST['product'] ) || empty( $_POST['action_type'] ) ) {
-					wp_send_json_error( 'Missing parameters' );
-				}
-				$product    = sanitize_text_field( wp_unslash( $_POST['product'] ) );
-				$actionType = sanitize_text_field( wp_unslash( $_POST['action_type'] ) );
-				$uid        = $this->get_user_uid();
-
-				global $wpdb;
-				$table = $wpdb->prefix . 'flw_shopping_cart';
-				$item  = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE uid = %s AND product_name = %s", $uid, $product ) );
-
-				if ( 'add' === $actionType ) {
-					if ( $item ) {
-						$new_quantity = $item->quantity + 1;
-						$wpdb->update( $table, [ 'quantity' => $new_quantity ], [ 'id' => $item->id ] );
-						wp_send_json_success( [ 'quantity' => $new_quantity ] );
-					} else {
-						$price = isset( $_POST['price'] ) ? floatval( wp_unslash( $_POST['price'] ) ) : 0;
-						$wpdb->insert( $table, [
-							'uid'           => $uid,
-							'product_name'  => $product,
-							'product_price' => $price,
-							'quantity'      => 1,
-							'added_at'      => current_time( 'mysql' )
-						] );
-						wp_send_json_success( [ 'quantity' => 1 ] );
-					}
-				}
-
-				if ( ! $item ) {
-					wp_send_json_error( 'Item not found' );
-				}
-
-				if ( 'plus' === $actionType ) {
-					$new_quantity = $item->quantity + 1;
-				} elseif ( 'minus' === $actionType ) {
-					$new_quantity = ( $item->quantity > 1 ) ? $item->quantity - 1 : 1;
-				} elseif ( 'remove' === $actionType ) {
-					$wpdb->delete( $table, [ 'id' => $item->id ] );
-					wp_send_json_success( [ 'quantity' => 0 ] );
-				} else {
-					wp_send_json_error( 'Invalid action' );
-				}
-
-				$wpdb->update( $table, [ 'quantity' => $new_quantity ], [ 'id' => $item->id ] );
-				wp_send_json_success( [ 'quantity' => $new_quantity ] );
-			}
+                if ( empty( $_POST['product'] ) || empty( $_POST['action_type'] ) ) {
+                    wp_send_json_error( 'Missing parameters' );
+                }
+                $product    = sanitize_text_field( wp_unslash( $_POST['product'] ) );
+                $actionType = sanitize_text_field( wp_unslash( $_POST['action_type'] ) );
+                $uid        = $this->get_user_uid();
+            
+                global $wpdb;
+                $table = $wpdb->prefix . 'flw_shopping_cart';
+                $item  = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE uid = %s AND product_name = %s", $uid, $product ) );
+            
+                if ( 'add' === $actionType ) {
+                    if ( $item ) {
+                        $new_quantity = $item->quantity + 1;
+                        $wpdb->update( $table, [ 'quantity' => $new_quantity ], [ 'id' => $item->id ] );
+                    } else {
+                        $price = isset( $_POST['price'] ) ? floatval( wp_unslash( $_POST['price'] ) ) : 0;
+                        $wpdb->insert( $table, [
+                            'uid'           => $uid,
+                            'product_name'  => $product,
+                            'product_price' => $price,
+                            'quantity'      => 1,
+                            'added_at'      => current_time( 'mysql' )
+                        ] );
+                        $new_quantity = 1;
+                    }
+                } elseif ( 'plus' === $actionType ) {
+                    $new_quantity = $item->quantity + 1;
+                    $wpdb->update( $table, [ 'quantity' => $new_quantity ], [ 'id' => $item->id ] );
+                } elseif ( 'minus' === $actionType ) {
+                    $new_quantity = max( 1, $item->quantity - 1 );
+                    $wpdb->update( $table, [ 'quantity' => $new_quantity ], [ 'id' => $item->id ] );
+                } elseif ( 'remove' === $actionType ) {
+                    $wpdb->delete( $table, [ 'id' => $item->id ] );
+                    $new_quantity = 0;
+                } else {
+                    wp_send_json_error( 'Invalid action' );
+                }
+            
+                // Calculate updated cart total
+                $cart_total = $wpdb->get_var( $wpdb->prepare(
+                    "SELECT SUM(product_price * quantity) FROM $table WHERE uid = %s", 
+                    $uid
+                ));
+                $cart_total = number_format($cart_total, 2);
+            
+                wp_send_json_success( [
+                    'quantity'   => $new_quantity,
+                    'cart_total' => $cart_total
+                ] );
+            }
+            
 
 			public function process_checkout() {
                 $name          = sanitize_text_field( wp_unslash( $_POST['name'] ) );

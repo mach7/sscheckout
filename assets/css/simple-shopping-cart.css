@@ -10,6 +10,14 @@
     padding: 0 15px;
 }
 
+.ssc-cart-total {
+    margin-top: 15px;
+    font-size: 1.2em;
+    font-weight: bold;
+    text-align: right;
+}
+
+
 .ss-cart-table {
     width: 100%;
     border-collapse: collapse;

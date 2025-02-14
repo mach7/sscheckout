@@ -239,7 +239,41 @@ jQuery(document).ready(function($) {
             }
         });
     });
-    
+    function updateCartTotal(newTotal) {
+        $(".ssc-cart-total h3").text("Total: $" + newTotal);
+    }
+
+    function updateItemQuantity($element, newQuantity) {
+        if ($element.is("tr")) {
+            $element.find(".ssc-item-quantity").text(newQuantity);
+        } else {
+            $element.find(".ssc-quantity").text(newQuantity);
+        }
+    }
+
+    function handleCartUpdate(action, productName, price) {
+        $.post(sscheckout_params.ajax_url, {
+            action: "ssc_update_cart",
+            product: productName,
+            action_type: action,
+            price: price
+        }, function(response) {
+            if (response.success) {
+                var newQuantity = response.data.quantity;
+                var newTotal = response.data.cart_total;
+
+                if (newQuantity === 0) {
+                    $("tr[data-product='" + productName + "'], .ssc-product[data-product='" + productName + "']").remove();
+                } else {
+                    updateItemQuantity($("tr[data-product='" + productName + "'], .ssc-product[data-product='" + productName + "']"), newQuantity);
+                }
+
+                updateCartTotal(newTotal);
+            } else {
+                console.log("Error updating cart: " + response.data);
+            }
+        });
+    }
     // Increase quantity.
     $(document).on("click", ".ssc-plus", function(e) {
         e.preventDefault();
