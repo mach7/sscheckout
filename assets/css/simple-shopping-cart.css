@@ -44,7 +44,7 @@
 }
 
 /* Zebra stripe for even rows */
-.ssc-cart-table tbody th{
+.ssc-cart-table tbody tr th{
 	background-color: #dcdcdc;
 }
 
