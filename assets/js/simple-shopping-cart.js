@@ -1,47 +1,33 @@
 jQuery(document).ready(function($) {
+
     /***** Stripe Checkout Integration *****/
     if ($('#card-element').length) {
-        // Initialize Stripe
         var stripe = Stripe(sscheckout_params.publishableKey);
         var elements = stripe.elements();
-        
-        // Custom styling for the Stripe card element.
+
         var style = {
             base: {
                 color: "#32325d",
                 fontFamily: '"Helvetica Neue", Helvetica, sans-serif',
                 fontSmoothing: "antialiased",
                 fontSize: "16px",
-                "::placeholder": {
-                    color: "#aab7c4"
-                }
+                "::placeholder": { color: "#aab7c4" }
             },
-            invalid: {
-                color: "#fa755a",
-                iconColor: "#fa755a"
-            }
+            invalid: { color: "#fa755a", iconColor: "#fa755a" }
         };
-        
-        // Create and mount the card element.
+
         var card = elements.create("card", { style: style });
         card.mount("#card-element");
-        
-        // Handle real-time validation errors.
+
         card.on("change", function(event) {
             var displayError = $("#card-errors");
-            if (event.error) {
-                displayError.text(event.error.message);
-            } else {
-                displayError.text("");
-            }
+            displayError.text(event.error ? event.error.message : "");
         });
-        
-        // Checkout form submission.
+
         $("#ss-checkout-form").submit(function(e) {
             e.preventDefault();
-            // Disable the submit button to prevent multiple clicks.
             $(this).find('button[type="submit"]').prop("disabled", true);
-            
+
             stripe.createPaymentMethod({
                 type: "card",
                 card: card,
@@ -55,24 +41,21 @@ jQuery(document).ready(function($) {
                     $("#card-errors").text(result.error.message);
                     $("#ss-checkout-form").find('button[type="submit"]').prop("disabled", false);
                 } else {
-                    var paymentMethod = result.paymentMethod.id;
                     var formData = {
                         action: "ssc_checkout",
                         name: $("input[name='name']").val(),
                         email: $("input[name='email']").val(),
                         password: $("input[name='password']").val(),
                         phone: $("input[name='phone']").val(),
-                        paymentMethod: paymentMethod,
-                        pickup_type: $("#pickup_type").val(),  // Ensure your checkout form includes a select with id="pickup_type"
-                        pickup_time: $("#pickup_time").val()   // And an input with id="pickup_time"
+                        paymentMethod: result.paymentMethod.id,
+                        pickup_type: $("#pickup_type").val(),
+                        pickup_date: $("#pickup_date").val(),
+                        pickup_time: $("#pickup_time").val()
                     };
                     $.post(sscheckout_params.ajax_url, formData, function(response) {
                         if (response.success) {
                             $("#ss-checkout-response").html("<p>" + response.data + "</p>");
-                            // Reload the page after a brief pause.
-                            setTimeout(function() {
-                                location.reload();
-                            }, 2000);
+                            setTimeout(function() { location.reload(); }, 2000);
                         } else {
                             $("#ss-checkout-response").html("<p>Error: " + response.data + "</p>");
                             $("#ss-checkout-form").find('button[type="submit"]').prop("disabled", false);
@@ -82,163 +65,88 @@ jQuery(document).ready(function($) {
             });
         });
     }
-    
-    /***** Client-Side Pickup Time Validation *****/
-    // Only add pickup time validation if pickup options are enabled.
+
+    /***** Pickup Time Validation *****/
     if (sscheckout_params.enable_pickup) {
         $("#pickup_date, #pickup_time").on("input change", function() {
-            // Clear any previous error message immediately.
-            $("#pickup-time-error").hide().text("");
-    
+            $("#pickup-time-error").hide().text(""); // Clear error
+
             var dateStr = $("#pickup_date").val();
             var timeStr = $("#pickup_time").val();
-    
-            // Ensure both fields are filled.
+
             if (!dateStr || !timeStr) {
                 $("#pickup-time-error").hide().text("Please select both a date and a time.").fadeIn("slow");
                 $("#ss-checkout-form button[type='submit']").prop("disabled", true);
                 return;
             }
-    
-            // Combine date and time into a Date object.
+
             var pickupDateTime = new Date(dateStr + "T" + timeStr);
             if (isNaN(pickupDateTime)) {
                 $("#pickup-time-error").hide().text("Invalid date/time selected.").fadeIn("slow");
                 $("#ss-checkout-form button[type='submit']").prop("disabled", true);
                 return;
             }
-    
+
             var now = new Date();
-            // Get the selected pickup type.
             var pickupTypeName = $("#pickup_type").val();
-            var pickupType = null;
-            if (sscheckout_params.pickup_types && Array.isArray(sscheckout_params.pickup_types)) {
-                for (var i = 0; i < sscheckout_params.pickup_types.length; i++) {
-                    if (sscheckout_params.pickup_types[i].name === pickupTypeName) {
-                        pickupType = sscheckout_params.pickup_types[i];
-                        break;
-                    }
-                }
-            }
+            var pickupType = sscheckout_params.pickup_types.find(pt => pt.name === pickupTypeName);
+
             if (!pickupType) {
                 $("#pickup-time-error").hide().text("Invalid pickup type.").fadeIn("slow");
                 $("#ss-checkout-form button[type='submit']").prop("disabled", true);
                 return;
             }
-    
-            // Validate minimum lead time.
-            var minLeadTime = pickupType.min_lead_time; // in hours
+
+            // Validate minimum lead time
+            var minLeadTime = pickupType.min_lead_time;
             var minAllowedTime = new Date(now.getTime() + minLeadTime * 60 * 60 * 1000);
             if (pickupDateTime < minAllowedTime) {
                 $("#pickup-time-error").hide().text("Pickup time must be at least " + minLeadTime + " hours from now.").fadeIn("slow");
                 $("#ss-checkout-form button[type='submit']").prop("disabled", true);
                 return;
             }
-    
-            // Determine the day number (1 = Monday, 7 = Sunday).
+
+            // Determine day of week
             var dayNum = pickupDateTime.getDay();
-            if (dayNum === 0) { 
-                dayNum = 7; 
-            }
-    
-            // Get and map global closed days.
-            var closedDays = sscheckout_params.global_restrictions.closed_days;
-            if (!Array.isArray(closedDays) || closedDays.length === 0) {
-                // If not set, assume Monday (1) is closed.
-                closedDays = [1];
-            } else {
-                var mapping = {
-                    "1": 1, "mon": 1, "monday": 1,
-                    "2": 2, "tue": 2, "tues": 2, "tuesday": 2,
-                    "3": 3, "wed": 3, "wednesday": 3,
-                    "4": 4, "thu": 4, "thurs": 4, "thursday": 4,
-                    "5": 5, "fri": 5, "friday": 5,
-                    "6": 6, "sat": 6, "saturday": 6,
-                    "7": 7, "sun": 7, "sunday": 7
-                };
-                closedDays = closedDays.map(function(day) {
-                    var lower = day.toString().toLowerCase().trim();
-                    return mapping[lower] || 0;
-                });
-            }
-    
-            // Debug: log current day and closed days.
-            console.log("Selected dayNum: " + dayNum, "Closed days: ", closedDays);
-    
-            // If the selected day is globally closed, show error.
-            if (closedDays.indexOf(dayNum) !== -1) {
+            if (dayNum === 0) { dayNum = 7; } // Convert Sunday (0) to 7
+
+            var closedDays = sscheckout_params.global_restrictions.closed_days.map(day => parseInt(day, 10));
+
+            if (closedDays.includes(dayNum)) {
                 $("#pickup-time-error").hide().text("The selected day is closed for orders.").fadeIn("slow");
                 $("#ss-checkout-form button[type='submit']").prop("disabled", true);
                 return;
             }
-    
-            // Validate against allowed time blocks for the pickup type.
-            // Use 3-letter abbreviations: 0->Mon, 1->Tue, ..., 6->Sun.
+
+            // Validate against allowed time blocks
             var dayAbbr = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
             var dayStr = dayAbbr[dayNum - 1];
             var allowedBlocks = pickupType.time_blocks[dayStr];
-    
-            // If no allowed time blocks are defined for this day, treat it as closed.
+
             if (!allowedBlocks || allowedBlocks.length === 0) {
                 $("#pickup-time-error").hide().text("The selected day is closed for orders.").fadeIn("slow");
                 $("#ss-checkout-form button[type='submit']").prop("disabled", true);
                 return;
-            } else {
-                // Validate that the selected time falls within one of the allowed blocks.
-                var hours = pickupDateTime.getHours();
-                var minutes = pickupDateTime.getMinutes();
-                var timeFormatted = ('0' + hours).slice(-2) + ':' + ('0' + minutes).slice(-2);
-                var valid = false;
-                for (var j = 0; j < allowedBlocks.length; j++) {
-                    var range = allowedBlocks[j].split('-'); // Expected format "HH:MM-HH:MM"
-                    if (timeFormatted >= range[0] && timeFormatted <= range[1]) {
-                        valid = true;
-                        break;
-                    }
-                }
-                if (!valid) {
-                    $("#pickup-time-error").hide().text("The selected pickup time is outside the allowed time blocks for " + pickupType.name + ".").fadeIn("slow");
-                    $("#ss-checkout-form button[type='submit']").prop("disabled", true);
-                    return;
-                }
             }
-    
-            // If all validations pass, fade out the error message and enable the submit button.
+
+            var timeFormatted = pickupDateTime.toTimeString().slice(0, 5); // HH:MM
+            var valid = allowedBlocks.some(range => {
+                var [start, end] = range.split('-');
+                return timeFormatted >= start && timeFormatted <= end;
+            });
+
+            if (!valid) {
+                $("#pickup-time-error").hide().text("The selected pickup time is outside the allowed time blocks for " + pickupType.name + ".").fadeIn("slow");
+                $("#ss-checkout-form button[type='submit']").prop("disabled", true);
+                return;
+            }
+
             $("#pickup-time-error").fadeOut("slow");
             $("#ss-checkout-form button[type='submit']").prop("disabled", false);
         });
     }
-    
-    
-    
-    
-    
-    
+
     /***** Cart Update Functionality *****/
-    // Add to Cart.
-    $(".ssc-add-to-cart").on("click", function(e) {
-        e.preventDefault();
-        var $productElem = $(this).closest(".ssc-product");
-        var productName = $productElem.data("product");
-        var productPrice = $productElem.data("price");
-        $.post(sscheckout_params.ajax_url, {
-            action: "ssc_update_cart",
-            product: productName,
-            action_type: "add",
-            price: productPrice
-        }, function(response) {
-            if (response.success) {
-                $productElem.html(
-                    '<button class="ssc-minus" data-action="minus">–</button> ' +
-                    '<span class="ssc-quantity">' + response.data.quantity + '</span> ' +
-                    '<button class="ssc-plus" data-action="plus">+</button> ' +
-                    '<button class="ssc-remove" data-action="remove">🗑️</button>'
-                );
-            } else {
-                console.log("Error adding to cart: " + response.data);
-            }
-        });
-    });
     function updateCartTotal(newTotal) {
         $(".ssc-cart-total h3").text("Total: $" + newTotal);
     }
@@ -274,65 +182,28 @@ jQuery(document).ready(function($) {
             }
         });
     }
-    // Increase quantity.
+
+    $(".ssc-add-to-cart").on("click", function(e) {
+        e.preventDefault();
+        var $productElem = $(this).closest(".ssc-product");
+        var productName = $productElem.data("product");
+        var productPrice = $productElem.data("price");
+        handleCartUpdate("add", productName, productPrice);
+    });
+
     $(document).on("click", ".ssc-plus", function(e) {
         e.preventDefault();
-        var $element = $(this).closest(".ssc-product, tr[data-product]");
-        var productName = $element.data("product");
-        $.post(sscheckout_params.ajax_url, {
-            action: "ssc_update_cart",
-            product: productName,
-            action_type: "plus"
-        }, function(response) {
-            if (response.success) {
-                if ($element.is("tr")) {
-                    $element.find(".ssc-item-quantity").text(response.data.quantity);
-                } else {
-                    $element.find(".ssc-quantity").text(response.data.quantity);
-                }
-            } else {
-                console.log("Error updating cart (plus): " + response.data);
-            }
-        });
+        handleCartUpdate("plus", $(this).closest(".ssc-product, tr[data-product]").data("product"));
     });
-    
-    // Decrease quantity.
+
     $(document).on("click", ".ssc-minus", function(e) {
         e.preventDefault();
-        var $element = $(this).closest(".ssc-product, tr[data-product]");
-        var productName = $element.data("product");
-        $.post(sscheckout_params.ajax_url, {
-            action: "ssc_update_cart",
-            product: productName,
-            action_type: "minus"
-        }, function(response) {
-            if (response.success) {
-                if ($element.is("tr")) {
-                    $element.find(".ssc-item-quantity").text(response.data.quantity);
-                } else {
-                    $element.find(".ssc-quantity").text(response.data.quantity);
-                }
-            } else {
-                console.log("Error updating cart (minus): " + response.data);
-            }
-        });
+        handleCartUpdate("minus", $(this).closest(".ssc-product, tr[data-product]").data("product"));
     });
-    
-    // Remove item from cart.
+
     $(document).on("click", ".ssc-remove", function(e) {
         e.preventDefault();
-        var $element = $(this).closest(".ssc-product, tr[data-product]");
-        var productName = $element.data("product");
-        $.post(sscheckout_params.ajax_url, {
-            action: "ssc_update_cart",
-            product: productName,
-            action_type: "remove"
-        }, function(response) {
-            if (response.success) {
-                $element.remove();
-            } else {
-                console.log("Error updating cart (remove): " + response.data);
-            }
-        });
+        handleCartUpdate("remove", $(this).closest(".ssc-product, tr[data-product]").data("product"));
     });
+
 });
