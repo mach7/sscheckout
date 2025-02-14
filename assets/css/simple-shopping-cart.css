@@ -44,8 +44,12 @@
 }
 
 /* Zebra stripe for even rows */
+.ssc-cart-table tbody th{
+	background-color: #dcdcdc;
+}
+
 .ssc-cart-table tbody tr:nth-child(even) {
-    background-color: #9e9e9e;
+    background-color: #dcdcdc;
 }
 
 /* Stripe card element styling */
