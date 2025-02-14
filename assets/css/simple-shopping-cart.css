@@ -1,15 +1,26 @@
-.ssc-item-price, .ssc-item-quantity, .ssc-item-actions{
-	text-align: center;
+/* Simple Shopping Cart Plugin CSS */
+
+/* Align cart item details */
+.ssc-item-price,
+.ssc-item-quantity,
+.ssc-item-actions {
+    text-align: center;
 }
-.qualityCol, .actionsCol {
-	width:200px;
+
+/* Fixed widths for specific columns */
+.qualityCol,
+.actionsCol {
+    width: 200px;
 }
-.ss-checkout {
+
+/* Checkout page container */
+.ssc-checkout {
     max-width: 600px;
     margin: 20px auto;
     padding: 0 15px;
 }
 
+/* Cart total display */
 .ssc-cart-total {
     margin-top: 15px;
     font-size: 1.2em;
@@ -17,42 +28,47 @@
     text-align: right;
 }
 
-
-.ss-cart-table {
+/* Cart table styling */
+.ssc-cart-table {
     width: 100%;
     border-collapse: collapse;
     margin-bottom: 20px;
 }
 
-.ss-cart-table th,
-.ss-cart-table td {
+/* Cart table header and cells */
+.ssc-cart-table th,
+.ssc-cart-table td {
     border: 1px solid #ddd;
     padding: 8px;
     text-align: left;
 }
 
+/* Zebra stripe for even rows */
+.ssc-cart-table tbody tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+/* Stripe card element styling */
 #card-element {
     border: 1px solid #ccc;
     padding: 10px;
     border-radius: 4px;
     margin-bottom: 10px;
-	max-width:50%;
+    max-width: 50%;
 }
 
+/* Card element error messages */
 #card-errors {
     color: #fa755a;
     margin-bottom: 10px;
 }
 
-.ss-product {
+/* Product block styling */
+.ssc-product {
     margin-bottom: 10px;
 }
 
-.ss-product button {
+/* Buttons within product block */
+.ssc-product button {
     margin-right: 5px;
-}
-
-
-.ssc-cart-table tbody tr:nth-child(even) {
-    background-color: #f9f9f9; /* Light gray background for even rows */
 }
