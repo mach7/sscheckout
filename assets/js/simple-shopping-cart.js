@@ -206,9 +206,39 @@ jQuery(document).ready(function($) {
     });
 
     /*** Remove from Cart and Restore "Add to Cart" ***/
+    /*** Remove from Cart and Restore "Add to Cart" ***/
     $(document).on("click", ".ssc-remove", function(e) {
         e.preventDefault();
-        handleCartUpdate("remove", $(this).closest(".ssc-product, tr[data-product]").data("product"));
+        var $element = $(this).closest(".ssc-product, tr[data-product]");
+        var productName = $element.data("product");
+
+        $.post(sscheckout_params.ajax_url, {
+            action: "ssc_update_cart",
+            product: productName,
+            action_type: "remove"
+        }, function(response) {
+            if (response.success) {
+                var newTotal = response.data.cart_total;
+
+                // Check if the element exists and is a cart item or add-to-cart button
+                if ($element.length) {
+                    if ($element.hasClass("ssc-product")) {
+                        // If it's a standalone product element, restore "Add to Cart" button
+                        $element.html(`
+                            <button class="ssc-add-to-cart">Add to Cart</button>
+                        `);
+                    } else {
+                        // Otherwise, remove the item from the cart table
+                        $element.remove();
+                    }
+                }
+
+                updateCartTotal(newTotal);
+            } else {
+                console.log("Error removing item from cart: " + response.data);
+            }
+        });
     });
+
 
 });
