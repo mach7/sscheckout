@@ -1,70 +1,201 @@
 jQuery(document).ready(function($) {
 
-    /***** Stripe Checkout Integration *****/
-    if ($('#card-element').length) {
-        var stripe = Stripe(sscheckout_params.publishableKey);
-        var elements = stripe.elements();
-
-        var style = {
-            base: {
-                color: "#32325d",
-                fontFamily: '"Helvetica Neue", Helvetica, sans-serif',
-                fontSmoothing: "antialiased",
-                fontSize: "16px",
-                "::placeholder": { color: "#aab7c4" }
-            },
-            invalid: { color: "#fa755a", iconColor: "#fa755a" }
-        };
-
-        var card = elements.create("card", { style: style });
-        card.mount("#card-element");
-
-        card.on("change", function(event) {
-            var displayError = $("#card-errors");
-            displayError.text(event.error ? event.error.message : "");
-        });
-
-        $("#ss-checkout-form").submit(function(e) {
-            e.preventDefault();
-            $(this).find('button[type="submit"]').prop("disabled", true);
-
-            stripe.createPaymentMethod({
-                type: "card",
-                card: card,
-                billing_details: {
-                    name: $("input[name='name']").val(),
-                    email: $("input[name='email']").val(),
-                    phone: $("input[name='phone']").val()
-                }
-            }).then(function(result) {
-                if (result.error) {
-                    $("#card-errors").text(result.error.message);
-                    $("#ss-checkout-form").find('button[type="submit"]').prop("disabled", false);
-                } else {
-                    var formData = {
-                        action: "ssc_checkout",
+        /***** Stripe Checkout Integration *****/
+        if ($('#card-element').length) {
+            var stripe = Stripe(sscheckout_params.publishableKey);
+            var elements = stripe.elements();
+    
+            var style = {
+                base: {
+                    color: "#32325d",
+                    fontFamily: '"Helvetica Neue", Helvetica, sans-serif',
+                    fontSmoothing: "antialiased",
+                    fontSize: "16px",
+                    "::placeholder": { color: "#aab7c4" }
+                },
+                invalid: { color: "#fa755a", iconColor: "#fa755a" }
+            };
+    
+            var card = elements.create("card", { style: style });
+            card.mount("#card-element");
+    
+            card.on("change", function (event) {
+                var displayError = $("#card-errors");
+                displayError.text(event.error ? event.error.message : "");
+            });
+    
+            $("#ss-checkout-form").submit(function (e) {
+                e.preventDefault();
+                $(this).find('button[type="submit"]').prop("disabled", true);
+    
+                stripe.createPaymentMethod({
+                    type: "card",
+                    card: card,
+                    billing_details: {
                         name: $("input[name='name']").val(),
                         email: $("input[name='email']").val(),
-                        password: $("input[name='password']").val(),
-                        phone: $("input[name='phone']").val(),
-                        paymentMethod: result.paymentMethod.id,
-                        pickup_type: $("#pickup_type").val(),
-                        pickup_date: $("#pickup_date").val(),
-                        pickup_time: $("#pickup_time").val()
-                    };
-                    $.post(sscheckout_params.ajax_url, formData, function(response) {
-                        if (response.success) {
-                            $("#ss-checkout-response").html("<p>" + response.data + "</p>");
-                            setTimeout(function() { location.reload(); }, 2000);
+                        phone: $("input[name='phone']").val()
+                    }
+                }).then(function (result) {
+                    if (result.error) {
+                        $("#card-errors").text(result.error.message);
+                        $("#ss-checkout-form").find('button[type="submit"]').prop("disabled", false);
+                    } else {
+                        var formData = {
+                            action: "ssc_checkout",
+                            name: $("input[name='name']").val(),
+                            email: $("input[name='email']").val(),
+                            password: $("input[name='password']").val(),
+                            phone: $("input[name='phone']").val(),
+                            paymentMethod: result.paymentMethod.id,
+                            pickup_type: $("#pickup_type").val(),
+                            pickup_date: $("#pickup_date").val(),
+                            pickup_time: $("#pickup_time").val()
+                        };
+                        $.post(sscheckout_params.ajax_url, formData, function (response) {
+                            if (response.success) {
+                                $("#ss-checkout-response").html("<p>" + response.data + "</p>");
+                                setTimeout(function () {
+                                    location.reload();
+                                }, 2000);
+                            } else {
+                                $("#ss-checkout-response").html("<p>Error: " + response.data + "</p>");
+                                $("#ss-checkout-form").find('button[type="submit"]').prop("disabled", false);
+                            }
+                        });
+                    }
+                });
+            });
+        }
+    
+        /***** Cart Update Functionality *****/
+        function updateCartTotal(newTotal) {
+            $(".ssc-cart-total h3").text("Total: $" + newTotal);
+        }
+    
+        function updateItemQuantity($element, newQuantity) {
+            if ($element && $element.length) {
+                if ($element.is("tr")) {
+                    $element.find(".ssc-item-quantity").text(newQuantity);
+                } else {
+                    $element.find(".ssc-quantity").text(newQuantity);
+                }
+            }
+        }
+    
+        function handleCartUpdate(action, productName, price, $element) {
+            $.post(sscheckout_params.ajax_url, {
+                action: "ssc_update_cart",
+                product: productName,
+                action_type: action,
+                price: price
+            }, function (response) {
+                if (response.success) {
+                    var newQuantity = response.data.quantity;
+                    var newTotal = response.data.cart_total;
+    
+                    if ($element && $element.length) {
+                        if (newQuantity === 0) {
+                            if ($element.hasClass("ssc-product")) {
+                                $element.html(`<button class="ssc-add-to-cart">Add to Cart</button>`);
+                            } else {
+                                $element.remove();
+                            }
                         } else {
-                            $("#ss-checkout-response").html("<p>Error: " + response.data + "</p>");
-                            $("#ss-checkout-form").find('button[type="submit"]').prop("disabled", false);
+                            updateItemQuantity($element, newQuantity);
                         }
-                    });
+                    }
+    
+                    updateCartTotal(newTotal);
+                } else {
+                    console.log("Error updating cart: " + response.data);
+                }
+            });
+        }
+    
+        /*** Add to Cart ***/
+        $(document).on("click", ".ssc-add-to-cart", function (e) {
+            e.preventDefault();
+            var $productElem = $(this).closest(".ssc-product");
+            var productName = $productElem.data("product");
+            var productPrice = $productElem.data("price");
+    
+            $.post(sscheckout_params.ajax_url, {
+                action: "ssc_update_cart",
+                product: productName,
+                action_type: "add",
+                price: productPrice
+            }, function (response) {
+                if (response.success) {
+                    $productElem.html(`
+                        <button class="ssc-minus" data-action="minus">–</button>
+                        <span class="ssc-quantity">${response.data.quantity}</span>
+                        <button class="ssc-plus" data-action="plus">+</button>
+                        <button class="ssc-remove" data-action="remove">🗑️</button>
+                    `);
+                    updateCartTotal(response.data.cart_total);
+                } else {
+                    console.log("Error adding to cart: " + response.data);
                 }
             });
         });
-    }
+    
+        /*** Increase Quantity ***/
+        $(document).on("click", ".ssc-plus", function (e) {
+            e.preventDefault();
+            var $element = $(this).closest(".ssc-product, tr[data-product]");
+            var productName = $element.data("product");
+    
+            if ($element.length) {
+                handleCartUpdate("plus", productName, null, $element);
+            } else {
+                console.log("Error: Element not found for increasing quantity.");
+            }
+        });
+    
+        /*** Decrease Quantity ***/
+        $(document).on("click", ".ssc-minus", function (e) {
+            e.preventDefault();
+            var $element = $(this).closest(".ssc-product, tr[data-product]");
+            var productName = $element.data("product");
+    
+            if ($element.length) {
+                handleCartUpdate("minus", productName, null, $element);
+            } else {
+                console.log("Error: Element not found for decreasing quantity.");
+            }
+        });
+    
+        /*** Remove from Cart and Restore "Add to Cart" ***/
+        $(document).on("click", ".ssc-remove", function (e) {
+            e.preventDefault();
+            var $element = $(this).closest(".ssc-product, tr[data-product]");
+            var productName = $element.data("product");
+    
+            $.post(sscheckout_params.ajax_url, {
+                action: "ssc_update_cart",
+                product: productName,
+                action_type: "remove"
+            }, function (response) {
+                if (response.success) {
+                    var newTotal = response.data.cart_total;
+    
+                    if ($element.length) {
+                        if ($element.hasClass("ssc-product")) {
+                            // Restore "Add to Cart" button when removed
+                            $element.html(`<button class="ssc-add-to-cart">Add to Cart</button>`);
+                        } else {
+                            // Remove row from cart table
+                            $element.remove();
+                        }
+                    }
+    
+                    updateCartTotal(newTotal);
+                } else {
+                    console.log("Error removing item from cart: " + response.data);
+                }
+            });
+        });
 
     /***** Pickup Time Validation *****/
     if (sscheckout_params.enable_pickup) {
