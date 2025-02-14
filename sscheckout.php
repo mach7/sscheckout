@@ -354,35 +354,47 @@ add_action('plugins_loaded', function () {
                 $enable_pickup = get_option( 'ssc_enable_pickup_options', 1 );
                 ?>
                 <div class="ssc-checkout">
-                    <h2>Your Cart</h2>
-                    <?php if ( $items ) : ?>
-                        <table class="ssc-cart-table">
-                            <thead>
-                                <tr>
-                                    <th>Product</th>
-                                    <th>Price</th>
-                                    <th class="qualityCol">Quantity</th>
-                                    <th class="actionsCol">Actions</th>
+                <h2>Your Cart</h2>
+                <?php if ( $items ) : ?>
+                    <table class="ssc-cart-table">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Price</th>
+                                <th class="qualityCol">Quantity</th>
+                                <th class="actionsCol">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php 
+                            $cart_total = 0; // Initialize total cart price
+                            foreach ( $items as $item ) : 
+                                $item_total = floatval($item->product_price) * intval($item->quantity);
+                                $cart_total += $item_total;
+                            ?>
+                                <tr data-product="<?php echo esc_attr( $item->product_name ); ?>">
+                                    <td><?php echo esc_html( $item->product_name ); ?></td>
+                                    <td class="ssc-item-price">$<?php echo number_format($item->product_price, 2); ?></td>
+                                    <td class="ssc-item-quantity"><?php echo intval( $item->quantity ); ?></td>
+                                    <td class="ssc-item-actions">
+                                        <button class="ssc-minus" data-action="minus">–</button>
+                                        <button class="ssc-plus" data-action="plus">+</button>
+                                        <button class="ssc-remove" data-action="remove">🗑️</button>
+                                    </td>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ( $items as $item ) : ?>
-                                    <tr data-product="<?php echo esc_attr( $item->product_name ); ?>">
-                                        <td><?php echo esc_html( $item->product_name ); ?></td>
-                                        <td class="ssc-item-price">$<?php echo esc_html( $item->product_price ); ?></td>
-                                        <td class="ssc-item-quantity"><?php echo intval( $item->quantity ); ?></td>
-                                        <td class="ssc-item-actions">
-                                            <button class="ssc-minus" data-action="minus">–</button>
-                                            <button class="ssc-plus" data-action="plus">+</button>
-                                            <button class="ssc-remove" data-action="remove">🗑️</button>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    <?php else : ?>
-                        <p>Your cart is empty.</p>
-                    <?php endif; ?>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+
+                    <!-- Cart Total Section -->
+                    <div class="ssc-cart-total">
+                        <h3>Total: $<?php echo number_format($cart_total, 2); ?></h3>
+                    </div>
+
+                <?php else : ?>
+                    <p>Your cart is empty.</p>
+                <?php endif; ?>
+
             
                     <h2>Checkout</h2>
                     <form id="ss-checkout-form">
