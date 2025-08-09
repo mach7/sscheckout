@@ -1,0 +1,5 @@
+*.php text eol=crlf
+*.js text eol=crlf
+*.css text eol=crlf
+* text=auto
+

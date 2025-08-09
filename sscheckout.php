@@ -7,7 +7,6 @@ Author: Tyson Brooks
 Author URI: https://frostlineworks.com
 Tested up to: 6.2
 */
-
 // Prevent direct access to this file.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -27,16 +26,13 @@ function ssc_display_disabled_banner() {
     }
 }
 add_action( 'wp_head', 'ssc_display_disabled_banner' );
-
 function enqueue_datepicker_assets() {
     wp_enqueue_script( 'jquery-ui-datepicker' );
     wp_enqueue_style( 'jquery-ui-css', 'https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css' );
 }
 add_action( 'wp_enqueue_scripts', 'enqueue_datepicker_assets' );
-
 // Ensure the FLW Plugin Library is loaded before running the plugin.
 add_action('plugins_loaded', function () {
-
 	// Check if the FLW Plugin Update Checker class exists.
 	if ( class_exists( 'FLW_Plugin_Update_Checker' ) ) {
 		$pluginSlug = basename( dirname( __FILE__ ) );
@@ -74,15 +70,12 @@ add_action('plugins_loaded', function () {
 			}
 		});
 	}
-
 	if ( class_exists( 'FLW_Plugin_Library' ) ) {
-
 		class SimpleShoppingCart_Plugin {
-
 			/**
 			 * Constructor – sets up activation, shortcodes, AJAX handlers, scripts, and admin menu.
 			 */
-			public function __construct() {
+            public function __construct() {
                 register_activation_hook( __FILE__, [ __CLASS__, 'activate' ] );
                 add_action( 'init', [ $this, 'maybe_create_tables' ] );
                 add_action( 'init', [ $this, 'register_shortcodes' ] );
@@ -91,22 +84,34 @@ add_action('plugins_loaded', function () {
                 add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_scripts' ] );
                 add_action( 'wp_ajax_ssc_update_cart', [ $this, 'update_cart' ] );
                 add_action( 'wp_ajax_nopriv_ssc_update_cart', [ $this, 'update_cart' ] );
-                add_action( 'wp_ajax_ssc_checkout', [ $this, 'process_checkout' ] );
-                add_action( 'wp_ajax_nopriv_ssc_checkout', [ $this, 'process_checkout' ] );
+                // New SCA-compliant Stripe flow: create intent + finalize order
+                add_action( 'wp_ajax_ssc_create_intent', [ $this, 'ajax_create_payment_intent' ] );
+                add_action( 'wp_ajax_nopriv_ssc_create_intent', [ $this, 'ajax_create_payment_intent' ] );
+                add_action( 'wp_ajax_ssc_finalize_order', [ $this, 'ajax_finalize_order' ] );
+                add_action( 'wp_ajax_nopriv_ssc_finalize_order', [ $this, 'ajax_finalize_order' ] );
                 add_action( 'admin_menu', [ $this, 'register_submenu' ] );
                 add_action( 'wp_ajax_ssc_remove_pickup_type', [ $this, 'remove_pickup_type_ajax' ] );
                 // Optionally, if non-logged-in users should be allowed (if applicable):
                 // add_action( 'wp_ajax_nopriv_ssc_remove_pickup_type', [ $this, 'remove_pickup_type_ajax' ] );
-
                 add_action( 'init', function() {
                     if ( ! is_user_logged_in() && ! isset( $_COOKIE['ssc_uid'] ) ) {
                         $uid = 'guest_' . wp_generate_uuid4();
-                        setcookie( 'ssc_uid', $uid, time() + ( 3600 * 24 * 30 ), COOKIEPATH, COOKIE_DOMAIN );
+                        // Set secure cookie flags
+                        $cookie_args = [
+                            'expires'  => time() + ( 3600 * 24 * 30 ),
+                            'path'     => COOKIEPATH,
+                            'domain'   => COOKIE_DOMAIN,
+                            'secure'   => is_ssl(),
+                            'httponly' => true,
+                            'samesite' => 'Lax',
+                        ];
+                        if ( function_exists( 'setcookie' ) ) {
+                            setcookie( 'ssc_uid', $uid, $cookie_args );
+                        }
                     }
                 });
             }
             
-
 			/**
 			 * Plugin activation callback to create required database tables.
 			 */
@@ -114,20 +119,19 @@ add_action('plugins_loaded', function () {
 				global $wpdb;
 				require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 				$charset_collate = $wpdb->get_charset_collate();
-
 				// Shopping Cart table.
 				$table1 = $wpdb->prefix . 'flw_shopping_cart';
-				$sql1 = "CREATE TABLE $table1 (
+                $sql1 = "CREATE TABLE $table1 (
 					id mediumint(9) NOT NULL AUTO_INCREMENT,
 					uid varchar(100) NOT NULL,
 					product_name varchar(255) NOT NULL,
 					product_price decimal(10,2) NOT NULL,
 					quantity int NOT NULL DEFAULT 1,
 					added_at datetime DEFAULT CURRENT_TIMESTAMP,
-					PRIMARY KEY (id)
+                    PRIMARY KEY (id),
+                    UNIQUE KEY uid_product (uid, product_name)
 				) $charset_collate;";
 				dbDelta( $sql1 );
-
 				// Order History table.
 				$table2 = $wpdb->prefix . 'flw_order_history';
 				$sql2 = "CREATE TABLE $table2 (
@@ -141,7 +145,6 @@ add_action('plugins_loaded', function () {
 					PRIMARY KEY (id)
 				) $charset_collate;";
 				dbDelta( $sql2 );
-
 				// Pickup Types table.
 				$table3 = $wpdb->prefix . 'flw_pickup_types';
 				$sql3 = "CREATE TABLE $table3 (
@@ -154,7 +157,6 @@ add_action('plugins_loaded', function () {
 				) $charset_collate;";
 				dbDelta( $sql3 );
 			}
-
 			/**
 			 * Checks if the custom tables exist; if not, calls activation.
 			 */
@@ -170,7 +172,6 @@ add_action('plugins_loaded', function () {
 					self::activate();
 				}
 			}
-
 			/**
 			 * Upgrades the database structure by running the current SQL schema.
 			 */
@@ -178,19 +179,18 @@ add_action('plugins_loaded', function () {
 				global $wpdb;
 				require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 				$charset_collate = $wpdb->get_charset_collate();
-
 				$table1 = $wpdb->prefix . 'flw_shopping_cart';
-				$sql1 = "CREATE TABLE $table1 (
+                $sql1 = "CREATE TABLE $table1 (
 					id mediumint(9) NOT NULL AUTO_INCREMENT,
 					uid varchar(100) NOT NULL,
 					product_name varchar(255) NOT NULL,
 					product_price decimal(10,2) NOT NULL,
 					quantity int NOT NULL DEFAULT 1,
 					added_at datetime DEFAULT CURRENT_TIMESTAMP,
-					PRIMARY KEY (id)
+                    PRIMARY KEY (id),
+                    UNIQUE KEY uid_product (uid, product_name)
 				) $charset_collate;";
 				dbDelta( $sql1 );
-
 				$table2 = $wpdb->prefix . 'flw_order_history';
 				$sql2 = "CREATE TABLE $table2 (
 					id mediumint(9) NOT NULL AUTO_INCREMENT,
@@ -203,7 +203,6 @@ add_action('plugins_loaded', function () {
 					PRIMARY KEY (id)
 				) $charset_collate;";
 				dbDelta( $sql2 );
-
 				$table3 = $wpdb->prefix . 'flw_pickup_types';
 				$sql3 = "CREATE TABLE $table3 (
 					id mediumint(9) NOT NULL AUTO_INCREMENT,
@@ -214,10 +213,8 @@ add_action('plugins_loaded', function () {
 					PRIMARY KEY (id)
 				) $charset_collate;";
 				dbDelta( $sql3 );
-
 				echo '<div class="updated"><p>Database upgraded successfully.</p></div>';
 			}
-
 			/**
 			 * Registers shortcodes.
 			 */
@@ -225,17 +222,16 @@ add_action('plugins_loaded', function () {
 				add_shortcode( 'add_to_cart', [ $this, 'add_to_cart_shortcode' ] );
 				add_shortcode( 'checkout', [ $this, 'checkout_shortcode' ] );
 			}
-
 			/**
 			 * Enqueues front-end JavaScript and CSS.
 			 */
-			public function enqueue_scripts() {
+            public function enqueue_scripts() {
                 wp_enqueue_script( 'stripe-js', 'https://js.stripe.com/v3/', array(), null, true );
                 wp_enqueue_script(
                     'simple-shopping-cart',
                     plugins_url( 'assets/js/simple-shopping-cart.js', __FILE__ ),
                     [ 'jquery' ],
-                    '1.1.7.2',
+                    '1.2.0',
                     true
                 );
 				global $wpdb;
@@ -260,14 +256,16 @@ add_action('plugins_loaded', function () {
                          'after_hours_start'=> get_option('ssc_after_hours_start', '18:00'),
                          'after_hours_end'  => get_option('ssc_after_hours_end', '08:00')
                     ],
-                    'pickup_types'   => $pickup_types
+                    'pickup_types'   => $pickup_types,
+                    // Nonces
+                    'cart_nonce'     => wp_create_nonce( 'ssc_cart' ),
+                    'checkout_nonce' => wp_create_nonce( 'ssc_checkout' ),
                 ] );
                 wp_enqueue_style(
                     'simple-shopping-cart',
                     plugins_url( 'assets/css/simple-shopping-cart.css', __FILE__ )
                 );
 			}
-
 			/**
 			 * Returns a unique identifier for the current user.
 			 */
@@ -280,11 +278,10 @@ add_action('plugins_loaded', function () {
 				}
 				return 'guest_' . wp_generate_uuid4();
 			}
-
 			/**
 			 * [add_to_cart] shortcode output.
 			 */
-			public function add_to_cart_shortcode( $atts ) {
+            public function add_to_cart_shortcode( $atts ) {
 				$atts = shortcode_atts(
 					[
 						'price' => '0',
@@ -293,11 +290,9 @@ add_action('plugins_loaded', function () {
 					$atts,
 					'add_to_cart'
 				);
-
 				$uid = $this->get_user_uid();
 				global $wpdb;
 				$table = $wpdb->prefix . 'flw_shopping_cart';
-
 				$existing = $wpdb->get_row(
 					$wpdb->prepare(
 						"SELECT * FROM $table WHERE uid = %s AND product_name = %s",
@@ -305,8 +300,12 @@ add_action('plugins_loaded', function () {
 						$atts['name']
 					)
 				);
-
-				ob_start();
+                // Prepare a signed price token to prevent tampering
+                $price_float = floatval( $atts['price'] );
+                $price_str   = number_format( $price_float, 2, '.', '' );
+                $sig_payload = $atts['name'] . '|' . $price_str;
+                $price_sig   = hash_hmac( 'sha256', $sig_payload, wp_salt( 'auth' ) );
+                ob_start();
 				if ( $existing ) {
 					?>
 					<div class="ssc-product" data-product="<?php echo esc_attr( $atts['name'] ); ?>">
@@ -318,14 +317,13 @@ add_action('plugins_loaded', function () {
 					<?php
 				} else {
 					?>
-					<div class="ssc-product" data-product="<?php echo esc_attr( $atts['name'] ); ?>" data-price="<?php echo esc_attr( $atts['price'] ); ?>">
+                    <div class="ssc-product" data-product="<?php echo esc_attr( $atts['name'] ); ?>" data-price="<?php echo esc_attr( $price_str ); ?>" data-sig="<?php echo esc_attr( $price_sig ); ?>">
 						<button class="ssc-add-to-cart">Add to Cart</button>
 					</div>
 					<?php
 				}
 				return ob_get_clean();
 			}
-
 			/**
 			 * [checkout] shortcode output.
 			 */
@@ -385,16 +383,13 @@ add_action('plugins_loaded', function () {
                             <?php endforeach; ?>
                         </tbody>
                     </table>
-
                     <!-- Cart Total Section -->
                     <div class="ssc-cart-total">
                         <h3>Total: $<?php echo number_format($cart_total, 2); ?></h3>
                     </div>
-
                 <?php else : ?>
                     <p>Your cart is empty.</p>
                 <?php endif; ?>
-
             
                     <h2>Checkout</h2>
                     <form id="ss-checkout-form">
@@ -440,8 +435,9 @@ add_action('plugins_loaded', function () {
                 <?php
                 return ob_get_clean();
 			}
-
-			public function update_cart() {
+            public function update_cart() {
+                // CSRF protection
+                check_ajax_referer( 'ssc_cart', 'nonce' );
                 if ( empty( $_POST['product'] ) || empty( $_POST['action_type'] ) ) {
                     wp_send_json_error( 'Missing parameters' );
                 }
@@ -458,23 +454,52 @@ add_action('plugins_loaded', function () {
                         $new_quantity = $item->quantity + 1;
                         $wpdb->update( $table, [ 'quantity' => $new_quantity ], [ 'id' => $item->id ] );
                     } else {
-                        $price = isset( $_POST['price'] ) ? floatval( wp_unslash( $_POST['price'] ) ) : 0;
-                        $wpdb->insert( $table, [
+                        // Verify signed price to prevent tampering
+                        $posted_price = isset( $_POST['price'] ) ? wp_unslash( $_POST['price'] ) : '0';
+                        $posted_sig   = isset( $_POST['sig'] ) ? sanitize_text_field( wp_unslash( $_POST['sig'] ) ) : '';
+                        $price_str    = number_format( floatval( $posted_price ), 2, '.', '' );
+                        $expected_sig = hash_hmac( 'sha256', $product . '|' . $price_str, wp_salt( 'auth' ) );
+                        if ( ! hash_equals( $expected_sig, $posted_sig ) ) {
+                            wp_send_json_error( 'Invalid price signature' );
+                        }
+                        $price = floatval( $price_str );
+                        // Try insert; if unique constraint triggers, fall back to update
+                        $inserted = $wpdb->insert( $table, [
                             'uid'           => $uid,
                             'product_name'  => $product,
                             'product_price' => $price,
                             'quantity'      => 1,
                             'added_at'      => current_time( 'mysql' )
                         ] );
-                        $new_quantity = 1;
+                        if ( false === $inserted ) {
+                            // Re-fetch and increment
+                            $item = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE uid = %s AND product_name = %s", $uid, $product ) );
+                            if ( $item ) {
+                                $new_quantity = $item->quantity + 1;
+                                $wpdb->update( $table, [ 'quantity' => $new_quantity ], [ 'id' => $item->id ] );
+                            } else {
+                                wp_send_json_error( 'Could not add item' );
+                            }
+                        } else {
+                            $new_quantity = 1;
+                        }
                     }
                 } elseif ( 'plus' === $actionType ) {
+                    if ( ! $item ) {
+                        wp_send_json_error( 'Item not found' );
+                    }
                     $new_quantity = $item->quantity + 1;
                     $wpdb->update( $table, [ 'quantity' => $new_quantity ], [ 'id' => $item->id ] );
                 } elseif ( 'minus' === $actionType ) {
+                    if ( ! $item ) {
+                        wp_send_json_error( 'Item not found' );
+                    }
                     $new_quantity = max( 1, $item->quantity - 1 );
                     $wpdb->update( $table, [ 'quantity' => $new_quantity ], [ 'id' => $item->id ] );
                 } elseif ( 'remove' === $actionType ) {
+                    if ( ! $item ) {
+                        wp_send_json_error( 'Item not found' );
+                    }
                     $wpdb->delete( $table, [ 'id' => $item->id ] );
                     $new_quantity = 0;
                 } else {
@@ -494,66 +519,35 @@ add_action('plugins_loaded', function () {
                 ] );
             }
             
-
-			public function process_checkout() {
-                $name          = sanitize_text_field( wp_unslash( $_POST['name'] ) );
-                $email         = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
-                $password      = isset( $_POST['password'] ) ? wp_unslash( $_POST['password'] ) : '';
-                $phone         = sanitize_text_field( wp_unslash( $_POST['phone'] ) );
-                $paymentMethod = sanitize_text_field( wp_unslash( $_POST['paymentMethod'] ) );
-
+            // Step 1: Create PaymentIntent (no confirmation)
+            public function ajax_create_payment_intent() {
+                check_ajax_referer( 'ssc_checkout', 'nonce' );
+                $name     = sanitize_text_field( wp_unslash( $_POST['name'] ?? '' ) );
+                $email    = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
+                $phone    = sanitize_text_field( wp_unslash( $_POST['phone'] ?? '' ) );
                 $enable_pickup = get_option( 'ssc_enable_pickup_options', 1 );
+                $pickup_type = $pickup_date = $pickup_time = '';
                 if ( $enable_pickup ) {
-                    $pickup_type = sanitize_text_field( wp_unslash( $_POST['pickup_type'] ) );
-                    $pickup_date = sanitize_text_field( wp_unslash( $_POST['pickup_date'] ) );
-                    $pickup_time = sanitize_text_field( wp_unslash( $_POST['pickup_time'] ) );
+                    $pickup_type = sanitize_text_field( wp_unslash( $_POST['pickup_type'] ?? '' ) );
+                    $pickup_date = sanitize_text_field( wp_unslash( $_POST['pickup_date'] ?? '' ) );
+                    $pickup_time = sanitize_text_field( wp_unslash( $_POST['pickup_time'] ?? '' ) );
                     $pickup_datetime_str = $pickup_date . ' ' . $pickup_time;
                     $pickup_datetime = DateTime::createFromFormat( 'Y-m-d H:i', $pickup_datetime_str );
                     if ( ! $pickup_datetime ) {
                         wp_send_json_error( 'Invalid pickup date/time format. Please use the provided date and time pickers.' );
                     }
-                } else {
-                    $pickup_type = '';
-                    $pickup_time = '';
-                }
-
-                $uid = $this->get_user_uid();
-
-                global $wpdb;
-                $cart_table  = $wpdb->prefix . 'flw_shopping_cart';
-                $order_table = $wpdb->prefix . 'flw_order_history';
-                $items       = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $cart_table WHERE uid = %s", $uid ) );
-
-                if ( ! $items ) {
-                    wp_send_json_error( 'Cart is empty' );
-                }
-
-                if ( get_option( 'ssc_global_orders_disabled', 0 ) ) {
-                    wp_send_json_error( 'Online orders are currently disabled.' );
-                }
-
-                if ( $enable_pickup ) {
-                    $closed_days = array_map('intval', (array) get_option('ssc_closed_days', []));
-                    $after_hours_start = get_option('ssc_after_hours_start', '18:00');
-                    $after_hours_end   = get_option('ssc_after_hours_end', '08:00');
-                    
-                    // Debug logging: log closed days and the pickup day's numeric value.
-                    error_log("DEBUG: Closed days from settings: " . print_r($closed_days, true));
-                    $pickup_day = intval($pickup_datetime->format('N'));
-                    error_log("DEBUG: Pickup datetime (N): " . $pickup_day);
-                    
+                    $closed_days = array_map( 'intval', (array) get_option( 'ssc_closed_days', [] ) );
+                    $pickup_day  = intval( $pickup_datetime->format( 'N' ) );
                     if ( in_array( $pickup_day, $closed_days, true ) ) {
-                        // Include debug info in the error response (for troubleshooting only)
-                        wp_send_json_error( 'The selected day is closed for orders. [DEBUG: closed_days: ' . print_r($closed_days, true) . '; pickup day: ' . $pickup_day . ']' );
+                        wp_send_json_error( 'The selected day is closed for orders.' );
                     }
-
                     global $wpdb;
-                    $pickup_table = $wpdb->prefix . 'flw_pickup_types';
-                    $pickup_types_db = $wpdb->get_results("SELECT * FROM $pickup_table", ARRAY_A);
-                    $selected_pt = null;
-                    if ( is_array($pickup_types_db) ) {
-                        foreach ($pickup_types_db as $pt) {
-                            if ( isset($pt['name']) && $pt['name'] === $pickup_type ) {
+                    $pickup_table    = $wpdb->prefix . 'flw_pickup_types';
+                    $pickup_types_db = $wpdb->get_results( "SELECT * FROM $pickup_table", ARRAY_A );
+                    $selected_pt     = null;
+                    if ( is_array( $pickup_types_db ) ) {
+                        foreach ( $pickup_types_db as $pt ) {
+                            if ( isset( $pt['name'] ) && $pt['name'] === $pickup_type ) {
                                 $selected_pt = $pt;
                                 break;
                             }
@@ -562,22 +556,20 @@ add_action('plugins_loaded', function () {
                     if ( ! $selected_pt ) {
                         wp_send_json_error( 'Invalid pickup type selected.' );
                     }
-                    $min_lead_time_hours = isset($selected_pt['min_lead_time']) ? intval($selected_pt['min_lead_time']) : 0;
-                    $allowed_time_blocks = isset($selected_pt['time_blocks']) ? wp_json_decode($selected_pt['time_blocks'], true) : [];
-                    
-                    $current_time = new DateTime();
+                    $min_lead_time_hours = isset( $selected_pt['min_lead_time'] ) ? intval( $selected_pt['min_lead_time'] ) : 0;
+                    $allowed_time_blocks = isset( $selected_pt['time_blocks'] ) ? wp_json_decode( $selected_pt['time_blocks'], true ) : [];
+                    $current_time     = new DateTime();
                     $min_allowed_time = clone $current_time;
-                    $min_allowed_time->add(new DateInterval('PT' . $min_lead_time_hours . 'H'));
+                    $min_allowed_time->add( new DateInterval( 'PT' . $min_lead_time_hours . 'H' ) );
                     if ( $pickup_datetime < $min_allowed_time ) {
                         wp_send_json_error( 'Pickup time must be at least ' . $min_lead_time_hours . ' hours from now.' );
                     }
-                    
-                    $day_of_week = $pickup_datetime->format('D');
-                    if ( isset($allowed_time_blocks[$day_of_week]) && is_array($allowed_time_blocks[$day_of_week]) ) {
+                    $day_of_week = $pickup_datetime->format( 'D' );
+                    if ( isset( $allowed_time_blocks[ $day_of_week ] ) && is_array( $allowed_time_blocks[ $day_of_week ] ) ) {
                         $is_valid_time = false;
-                        foreach ( $allowed_time_blocks[$day_of_week] as $time_range ) {
-                            list( $start, $end ) = explode('-', $time_range );
-                            $pickup_time_only = $pickup_datetime->format('H:i');
+                        foreach ( $allowed_time_blocks[ $day_of_week ] as $time_range ) {
+                            list( $start, $end ) = explode( '-', $time_range );
+                            $pickup_time_only = $pickup_datetime->format( 'H:i' );
                             if ( $pickup_time_only >= $start && $pickup_time_only <= $end ) {
                                 $is_valid_time = true;
                                 break;
@@ -588,31 +580,32 @@ add_action('plugins_loaded', function () {
                         }
                     }
                 }
-
+                $uid = $this->get_user_uid();
+                global $wpdb;
+                $cart_table = $wpdb->prefix . 'flw_shopping_cart';
+                $items      = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $cart_table WHERE uid = %s", $uid ) );
+                if ( ! $items ) {
+                    wp_send_json_error( 'Cart is empty' );
+                }
+                if ( get_option( 'ssc_global_orders_disabled', 0 ) ) {
+                    wp_send_json_error( 'Online orders are currently disabled.' );
+                }
                 $total = 0;
                 foreach ( $items as $item ) {
                     $total += floatval( $item->product_price ) * intval( $item->quantity );
                 }
-                $amount = intval( $total * 100 );
-
+                $amount = intval( round( $total * 100 ) );
                 $stripe_secret = get_option( 'flw_stripe_secret_key' );
                 if ( ! $stripe_secret ) {
                     wp_send_json_error( 'Stripe secret key not found' );
                 }
-
                 $order_id = 'ORDER-' . time();
-
                 $ch = curl_init( 'https://api.stripe.com/v1/payment_intents' );
-                $return_url = site_url( '/checkout' );
                 $intent_data = http_build_query( [
-                    'amount'              => $amount,
-                    'currency'            => 'usd',
-                    'payment_method'      => $paymentMethod,
-                    'confirmation_method' => 'automatic',
-                    'confirm'             => 'true',
-                    'return_url'          => $return_url,
-                    'description'         => 'Charge for ' . $name,
-                    'metadata[order_id]'  => $order_id,
+                    'amount'             => $amount,
+                    'currency'           => 'usd',
+                    'description'        => 'Charge for ' . $name,
+                    'metadata[order_id]' => $order_id,
                 ] );
                 curl_setopt( $ch, CURLOPT_USERPWD, $stripe_secret . ':' );
                 curl_setopt( $ch, CURLOPT_POST, true );
@@ -621,12 +614,55 @@ add_action('plugins_loaded', function () {
                 $intent_response = curl_exec( $ch );
                 $intent_result   = json_decode( $intent_response, true );
                 curl_close( $ch );
-
                 if ( isset( $intent_result['error'] ) ) {
-                    wp_send_json_error( 'Stripe PaymentIntent error: ' . $intent_result['error']['message'] );
+                    wp_send_json_error( 'Stripe error: ' . $intent_result['error']['message'] );
                 }
-
-                if ( ! is_user_logged_in() ) {
+                if ( empty( $intent_result['client_secret'] ) || empty( $intent_result['id'] ) ) {
+                    wp_send_json_error( 'Failed to create payment.' );
+                }
+                wp_send_json_success( [
+                    'client_secret' => $intent_result['client_secret'],
+                    'order_id'      => $order_id,
+                ] );
+            }
+            // Step 2: Finalize order after client confirmation
+            public function ajax_finalize_order() {
+                check_ajax_referer( 'ssc_checkout', 'nonce' );
+                $name     = sanitize_text_field( wp_unslash( $_POST['name'] ?? '' ) );
+                $email    = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
+                $password = isset( $_POST['password'] ) ? wp_unslash( $_POST['password'] ) : '';
+                $phone    = sanitize_text_field( wp_unslash( $_POST['phone'] ?? '' ) );
+                $pi_id    = sanitize_text_field( wp_unslash( $_POST['payment_intent_id'] ?? '' ) );
+                if ( empty( $pi_id ) ) {
+                    wp_send_json_error( 'Missing payment intent.' );
+                }
+                // Verify PaymentIntent status
+                $stripe_secret = get_option( 'flw_stripe_secret_key' );
+                if ( ! $stripe_secret ) {
+                    wp_send_json_error( 'Stripe secret key not found' );
+                }
+                $ch = curl_init( 'https://api.stripe.com/v1/payment_intents/' . rawurlencode( $pi_id ) );
+                curl_setopt( $ch, CURLOPT_USERPWD, $stripe_secret . ':' );
+                curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
+                $pi_response = curl_exec( $ch );
+                curl_close( $ch );
+                $pi = json_decode( $pi_response, true );
+                if ( isset( $pi['error'] ) ) {
+                    wp_send_json_error( 'Stripe error: ' . $pi['error']['message'] );
+                }
+                if ( empty( $pi['status'] ) || ! in_array( $pi['status'], [ 'succeeded', 'processing', 'requires_capture' ], true ) ) {
+                    wp_send_json_error( 'Payment not completed.' );
+                }
+                $uid = $this->get_user_uid();
+                global $wpdb;
+                $cart_table  = $wpdb->prefix . 'flw_shopping_cart';
+                $order_table = $wpdb->prefix . 'flw_order_history';
+                $items       = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $cart_table WHERE uid = %s", $uid ) );
+                if ( ! $items ) {
+                    wp_send_json_error( 'Cart is empty' );
+                }
+                // Create user if needed
+                if ( ! is_user_logged_in() && $email ) {
                     if ( email_exists( $email ) === false ) {
                         $user_id = wp_create_user( $email, $password, $email );
                         if ( is_wp_error( $user_id ) ) {
@@ -634,7 +670,8 @@ add_action('plugins_loaded', function () {
                         }
                     }
                 }
-
+                $order_id = isset( $pi['metadata']['order_id'] ) ? $pi['metadata']['order_id'] : ( 'ORDER-' . time() );
+                // Send admin email
                 $admin_email = get_option( 'ssc_order_admin_email' );
                 if ( ! $admin_email ) {
                     $admin_email = get_option( 'admin_email' );
@@ -643,22 +680,13 @@ add_action('plugins_loaded', function () {
                 $message  = "New Order Received\n\n";
                 $message .= "Customer Details:\n";
                 $message .= "Name: " . $name . "\n";
-                if ( ! empty( $email ) ) {
-                    $message .= "Email: " . $email . "\n";
-                }
-                if ( ! empty( $phone ) ) {
-                    $message .= "Phone: " . $phone . "\n";
-                }
-                if ( $enable_pickup ) {
-                    $message .= "Pickup Type: " . $pickup_type . "\n";
-                    $message .= "Pickup Time: " . $pickup_date . " " . $pickup_time . "\n";
-                }
+                if ( ! empty( $email ) ) { $message .= "Email: " . $email . "\n"; }
+                if ( ! empty( $phone ) ) { $message .= "Phone: " . $phone . "\n"; }
                 $message .= "\nOrder Details:\n";
                 foreach ( $items as $item ) {
                     $message .= $item->product_name . ' x ' . $item->quantity . ' - $' . $item->product_price . "\n";
                 }
                 wp_mail( $admin_email, $subject, $message );
-
                 foreach ( $items as $item ) {
                     $wpdb->insert( $order_table, [
                         'uid'           => $uid,
@@ -666,34 +694,28 @@ add_action('plugins_loaded', function () {
                         'product_name'  => $item->product_name,
                         'product_price' => $item->product_price,
                         'quantity'      => $item->quantity,
-                        'purchased_at'  => current_time( 'mysql' )
+                        'purchased_at'  => current_time( 'mysql' ),
                     ] );
                 }
-
                 $wpdb->delete( $cart_table, [ 'uid' => $uid ] );
-
                 wp_send_json_success( 'Payment successful and order processed. Order Number: ' . $order_id );
             }
-
 			public function render_stripe_transactions_page() {
 				$stripe_secret = get_option( 'flw_stripe_secret_key' );
 				if ( ! $stripe_secret ) {
 					echo '<div class="error"><p>Stripe secret key not set.</p></div>';
 					return;
 				}
-
 				$ch = curl_init( 'https://api.stripe.com/v1/charges?limit=20' );
 				curl_setopt( $ch, CURLOPT_USERPWD, $stripe_secret . ':' );
 				curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
 				$response = curl_exec( $ch );
 				curl_close( $ch );
-
 				$charges = json_decode( $response, true );
 				if ( isset( $charges['error'] ) ) {
 					echo '<div class="error"><p>Error retrieving transactions: ' . esc_html( $charges['error']['message'] ) . '</p></div>';
 					return;
 				}
-
 				echo '<div class="wrap"><h1>Stripe Transactions</h1>';
 				echo '<table class="wp-list-table widefat fixed striped">';
 				echo '<thead><tr>';
@@ -704,24 +726,20 @@ add_action('plugins_loaded', function () {
 				echo '<th>Status</th>';
 				echo '<th>Created</th>';
 				echo '</tr></thead><tbody>';
-
 				foreach ( $charges['data'] as $charge ) {
 					$created = date( 'Y-m-d H:i:s', $charge['created'] );
-
 					$customer_name = 'N/A';
 					if ( isset( $charge['source']['name'] ) && ! empty( $charge['source']['name'] ) ) {
 						$customer_name = $charge['source']['name'];
 					} elseif ( isset( $charge['billing_details']['name'] ) && ! empty( $charge['billing_details']['name'] ) ) {
 						$customer_name = $charge['billing_details']['name'];
 					}
-
 					$order_id = 'N/A';
 					if ( isset( $charge['metadata']['order_id'] ) && ! empty( $charge['metadata']['order_id'] ) ) {
 						$order_id_text = $charge['metadata']['order_id'];
 						$order_link = admin_url( 'admin.php?page=simple-shopping-cart-order-details&order_id=' . urlencode( $order_id_text ) );
 						$order_id = '<a href="' . esc_url( $order_link ) . '">' . esc_html( $order_id_text ) . '</a>';
 					}
-
 					echo '<tr>';
 					echo '<td>' . esc_html( $customer_name ) . '</td>';
 					echo '<td>' . $order_id . '</td>';
@@ -731,10 +749,8 @@ add_action('plugins_loaded', function () {
 					echo '<td>' . esc_html( $created ) . '</td>';
 					echo '</tr>';
 				}
-
 				echo '</tbody></table></div>';
 			}
-
 			public function render_order_details_page() {
 				if ( ! isset( $_GET['order_id'] ) ) {
 					echo '<div class="wrap"><h1>Order Details</h1><p>No order selected.</p></div>';
@@ -775,7 +791,6 @@ add_action('plugins_loaded', function () {
 				}
 				echo '</div>';
 			}
-
 			public function register_submenu() {
 				FLW_Plugin_Library::add_submenu(
 					'Shopping Cart Settings',
@@ -793,8 +808,7 @@ add_action('plugins_loaded', function () {
 					[ $this, 'render_stripe_transactions_page' ]
 				);
 			}
-
-			public function render_settings_page() {
+            public function render_settings_page() {
                 global $wpdb;
                 
                 // Handle Upgrade Database button.
@@ -809,6 +823,9 @@ add_action('plugins_loaded', function () {
                 
                 // Process form submission for general settings.
                 if ( isset( $_POST['ssc_save_settings'] ) ) {
+                    if ( ! isset( $_POST['ssc_settings_nonce'] ) || ! wp_verify_nonce( $_POST['ssc_settings_nonce'], 'ssc_settings_save' ) ) {
+                        echo '<div class="error"><p>Security check failed. Please refresh and try again.</p></div>';
+                    } else {
                     // Save admin email.
                     update_option( 'ssc_order_admin_email', sanitize_email( wp_unslash( $_POST['order_admin_email'] ) ) );
                     
@@ -864,6 +881,7 @@ add_action('plugins_loaded', function () {
                     update_option( 'ssc_global_orders_disabled', $global_orders_disabled );
                     
                     echo '<div class="updated"><p>Settings saved.</p></div>';
+                    }
                 }
                 
                 // Retrieve saved settings.
@@ -923,6 +941,7 @@ add_action('plugins_loaded', function () {
                 <div class="wrap">
                     <h1>Shopping Cart Settings</h1>
                     <form method="post" action="">
+                        <?php wp_nonce_field( 'ssc_settings_save', 'ssc_settings_nonce' ); ?>
                         <!-- Admin Email -->
                         <table class="form-table">
                             <tr>
@@ -1160,9 +1179,7 @@ add_action('plugins_loaded', function () {
             
             
 		}
-
 		new SimpleShoppingCart_Plugin();
-
 	} else {
 		add_action( 'admin_notices', function () {
 			echo '<div class="notice notice-error"><p>The FLW Plugin Library must be activated for Simple Shopping Cart to work.</p></div>';
