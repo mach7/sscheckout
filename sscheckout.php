@@ -2,7 +2,7 @@
 /*
 Plugin Name: Simple Shopping Cart
 Description: A simple shopping cart plugin with Stripe checkout integration.
-Version: 1.2.6
+Version: 1.3.0
 Author: Tyson Brooks
 Author URI: https://frostlineworks.com
 Tested up to: 6.2
@@ -93,6 +93,7 @@ add_action('plugins_loaded', function () {
                 add_action( 'wp_ajax_ssc_remove_pickup_type', [ $this, 'remove_pickup_type_ajax' ] );
                 // Optionally, if non-logged-in users should be allowed (if applicable):
                 // add_action( 'wp_ajax_nopriv_ssc_remove_pickup_type', [ $this, 'remove_pickup_type_ajax' ] );
+                // Nothing else required here for gift cards
                 add_action( 'init', function() {
                     if ( ! is_user_logged_in() && ! isset( $_COOKIE['ssc_uid'] ) ) {
                         $uid = 'guest_' . wp_generate_uuid4();
@@ -221,6 +222,7 @@ add_action('plugins_loaded', function () {
 			public function register_shortcodes() {
 				add_shortcode( 'add_to_cart', [ $this, 'add_to_cart_shortcode' ] );
 				add_shortcode( 'checkout', [ $this, 'checkout_shortcode' ] );
+                add_shortcode( 'gift_cards', [ $this, 'gift_cards_shortcode' ] );
 			}
 			/**
 			 * Enqueues front-end JavaScript and CSS.
@@ -324,6 +326,34 @@ add_action('plugins_loaded', function () {
 				}
 				return ob_get_clean();
 			}
+            /**
+             * [gift_cards] shortcode output – renders enabled gift card denominations.
+             */
+            public function gift_cards_shortcode() {
+                $gift_cards = get_option( 'ssc_gift_cards', [] );
+                if ( ! is_array( $gift_cards ) || empty( $gift_cards ) ) {
+                    return '<p>No gift cards available at this time.</p>';
+                }
+                // Build output using existing add_to_cart renderer to keep behavior consistent
+                ob_start();
+                echo '<div class="ssc-gift-cards">';
+                foreach ( $gift_cards as $gc ) {
+                    $enabled = isset( $gc['enabled'] ) ? intval( $gc['enabled'] ) : 0;
+                    $price   = isset( $gc['price'] ) ? floatval( $gc['price'] ) : 0;
+                    $stock   = isset( $gc['stock'] ) ? intval( $gc['stock'] ) : 0;
+                    if ( ! $enabled || $price <= 0 || $stock < 0 ) {
+                        continue;
+                    }
+                    $name = 'Gift Card $' . number_format( $price, 2 );
+                    echo '<div class="ssc-gift-card">';
+                    echo '<div class="ssc-product-title">' . esc_html( $name ) . '</div>';
+                    // Render the add_to_cart block for this gift card
+                    echo $this->add_to_cart_shortcode( [ 'name' => $name, 'price' => (string) $price ] );
+                    echo '</div>';
+                }
+                echo '</div>';
+                return ob_get_clean();
+            }
 			/**
 			 * [checkout] shortcode output.
 			 */
@@ -448,9 +478,26 @@ add_action('plugins_loaded', function () {
                 global $wpdb;
                 $table = $wpdb->prefix . 'flw_shopping_cart';
                 $item  = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE uid = %s AND product_name = %s", $uid, $product ) );
+
+                // Gift card inventory check helper
+                $is_gift_card = $this->is_gift_card_product( $product );
+                $available_left = null;
+                if ( $is_gift_card ) {
+                    $available_left = $this->get_gift_card_available( $product );
+                }
             
                 if ( 'add' === $actionType ) {
                     if ( $item ) {
+                        // Inventory gate for gift cards
+                        if ( $is_gift_card ) {
+                            $requested_qty = intval( $item->quantity ) + 1;
+                            if ( $available_left <= 0 ) {
+                                wp_send_json_error( 'Gift card is out of stock.' );
+                            }
+                            if ( $requested_qty > $available_left ) {
+                                wp_send_json_error( 'Only ' . intval( $available_left ) . ' gift card(s) remaining.' );
+                            }
+                        }
                         $new_quantity = $item->quantity + 1;
                         $wpdb->update( $table, [ 'quantity' => $new_quantity ], [ 'id' => $item->id ] );
                     } else {
@@ -461,6 +508,12 @@ add_action('plugins_loaded', function () {
                         $expected_sig = hash_hmac( 'sha256', $product . '|' . $price_str, wp_salt( 'auth' ) );
                         if ( ! hash_equals( $expected_sig, $posted_sig ) ) {
                             wp_send_json_error( 'Invalid price signature' );
+                        }
+                        // Inventory gate for gift cards
+                        if ( $is_gift_card ) {
+                            if ( $available_left <= 0 ) {
+                                wp_send_json_error( 'Gift card is out of stock.' );
+                            }
                         }
                         $price = floatval( $price_str );
                         // Try insert; if unique constraint triggers, fall back to update
@@ -487,6 +540,15 @@ add_action('plugins_loaded', function () {
                 } elseif ( 'plus' === $actionType ) {
                     if ( ! $item ) {
                         wp_send_json_error( 'Item not found' );
+                    }
+                    if ( $is_gift_card ) {
+                        $requested_qty = intval( $item->quantity ) + 1;
+                        if ( $available_left <= 0 ) {
+                            wp_send_json_error( 'Gift card is out of stock.' );
+                        }
+                        if ( $requested_qty > $available_left ) {
+                            wp_send_json_error( 'Only ' . intval( $available_left ) . ' gift card(s) remaining.' );
+                        }
                     }
                     $new_quantity = $item->quantity + 1;
                     $wpdb->update( $table, [ 'quantity' => $new_quantity ], [ 'id' => $item->id ] );
@@ -517,6 +579,65 @@ add_action('plugins_loaded', function () {
                     'quantity'   => $new_quantity,
                     'cart_total' => $cart_total
                 ] );
+            }
+
+            /**
+             * Parse a standardized price from a product name like "Gift Card $50" or "Gift Card $50.00".
+             */
+            private function parse_gift_card_price_from_name( $product_name ) {
+                if ( ! is_string( $product_name ) ) { return null; }
+                if ( preg_match( '/^\s*Gift\s+Card\s+\$([0-9]+(?:\.[0-9]{1,2})?)\s*$/i', $product_name, $m ) ) {
+                    return round( floatval( $m[1] ), 2 );
+                }
+                return null;
+            }
+
+            /**
+             * Determine if the given product name corresponds to a configured gift card.
+             */
+            private function is_gift_card_product( $product_name ) {
+                $price_from_name = $this->parse_gift_card_price_from_name( $product_name );
+                if ( null === $price_from_name ) { return false; }
+                $gift_cards = get_option( 'ssc_gift_cards', [] );
+                if ( ! is_array( $gift_cards ) || empty( $gift_cards ) ) { return false; }
+                foreach ( $gift_cards as $gc ) {
+                    $enabled = ! empty( $gc['enabled'] );
+                    $price   = isset( $gc['price'] ) ? round( floatval( $gc['price'] ), 2 ) : 0;
+                    if ( $enabled && $price > 0 && abs( $price - $price_from_name ) < 0.001 ) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            /**
+             * Get available remaining quantity for a gift card product name.
+             * Computed as configured stock minus sold quantity.
+             */
+            private function get_gift_card_available( $product_name ) {
+                global $wpdb;
+                $price_from_name = $this->parse_gift_card_price_from_name( $product_name );
+                if ( null === $price_from_name ) { return PHP_INT_MAX; }
+                $gift_cards = get_option( 'ssc_gift_cards', [] );
+                if ( ! is_array( $gift_cards ) || empty( $gift_cards ) ) { return PHP_INT_MAX; }
+                $configured_stock = null;
+                foreach ( $gift_cards as $gc ) {
+                    $enabled = ! empty( $gc['enabled'] );
+                    $price   = isset( $gc['price'] ) ? round( floatval( $gc['price'] ), 2 ) : 0;
+                    $stock   = isset( $gc['stock'] ) ? intval( $gc['stock'] ) : 0;
+                    if ( $enabled && $price > 0 && abs( $price - $price_from_name ) < 0.001 ) {
+                        $configured_stock = max( 0, $stock );
+                        break;
+                    }
+                }
+                if ( null === $configured_stock ) { return PHP_INT_MAX; }
+                // Sum sold quantities for both common name formats
+                $name_a = 'Gift Card $' . number_format( $price_from_name, 2 );
+                $name_b = 'Gift Card $' . number_format( $price_from_name, 0 );
+                $order_table = $wpdb->prefix . 'flw_order_history';
+                $sold = intval( $wpdb->get_var( $wpdb->prepare( "SELECT COALESCE(SUM(quantity),0) FROM $order_table WHERE product_name IN (%s,%s)", $name_a, $name_b ) ) );
+                $available = max( 0, $configured_stock - $sold );
+                return $available;
             }
             
             // Step 1: Create PaymentIntent (no confirmation)
@@ -589,6 +710,16 @@ add_action('plugins_loaded', function () {
                 }
                 if ( get_option( 'ssc_global_orders_disabled', 0 ) ) {
                     wp_send_json_error( 'Online orders are currently disabled.' );
+                }
+                // Gift card stock re-validation before creating payment
+                foreach ( $items as $ci ) {
+                    $product_name = $ci->product_name;
+                    if ( $this->is_gift_card_product( $product_name ) ) {
+                        $available = $this->get_gift_card_available( $product_name );
+                        if ( intval( $ci->quantity ) > $available ) {
+                            wp_send_json_error( 'Insufficient stock for ' . esc_html( $product_name ) . '. Only ' . intval( $available ) . ' remaining.' );
+                        }
+                    }
                 }
                 $total = 0;
                 foreach ( $items as $item ) {
@@ -682,6 +813,8 @@ add_action('plugins_loaded', function () {
                 $message .= "Name: " . $name . "\n";
                 if ( ! empty( $email ) ) { $message .= "Email: " . $email . "\n"; }
                 if ( ! empty( $phone ) ) { $message .= "Phone: " . $phone . "\n"; }
+                // Note gift card delivery method (in-store pickup only per configuration)
+                $message .= "\nGift Card Delivery: In-store pickup\n";
                 $message .= "\nOrder Details:\n";
                 foreach ( $items as $item ) {
                     $message .= $item->product_name . ' x ' . $item->quantity . ' - $' . $item->product_price . "\n";
@@ -807,7 +940,59 @@ add_action('plugins_loaded', function () {
 					'simple-shopping-cart-transactions',
 					[ $this, 'render_stripe_transactions_page' ]
 				);
+                FLW_Plugin_Library::add_submenu(
+                    'Instructions',
+                    'simple-shopping-cart-instructions',
+                    [ $this, 'render_instructions_page' ]
+                );
 			}
+            public function render_instructions_page() {
+                // Static instructions page for admins
+                echo '<div class="wrap">';
+                echo '<h1>Simple Shopping Cart — Instructions</h1>';
+                echo '<p>Use the shortcodes and settings below to add products, sell physical gift cards with limited stock, and collect payments via Stripe.</p>';
+
+                echo '<h2>Shortcodes</h2>';
+                echo '<ul>';
+                echo '<li><strong>[add_to_cart]</strong> — Add an individual product button. Example: <code>[add_to_cart name="Espresso" price="3.50"]</code></li>';
+                echo '<li><strong>[gift_cards]</strong> — Render configured gift card denominations as add-to-cart blocks.</li>';
+                echo '<li><strong>[checkout]</strong> — Display the cart and checkout/payment form.</li>';
+                echo '</ul>';
+
+                echo '<h2>Gift Cards</h2>';
+                echo '<ol>';
+                echo '<li>Navigate to <em>Shopping Cart Settings</em> → <strong>Gift Cards</strong>.</li>';
+                echo '<li>Enable Gift Cards and add one or more denominations with total stock.</li>';
+                echo '<li>Place the <code>[gift_cards]</code> shortcode on a page to sell them.</li>';
+                echo '<li>Gift card product names are standardized as <code>Gift Card $PRICE</code> (e.g., <code>Gift Card $50.00</code>).</li>';
+                echo '<li>Stock is enforced when adding to cart and again before payment is created.</li>';
+                echo '<li>Gift cards can be purchased with other items in the same cart.</li>';
+                echo '</ol>';
+
+                echo '<h2>Pickup Options</h2>';
+                echo '<p>Enable pickup options in <em>Shopping Cart Settings</em> → <strong>General Checkout Settings</strong>. Configure pickup types and time blocks under <strong>Pickup Types Management</strong>. The checkout will require an in-store pickup selection for gift cards.</p>';
+
+                echo '<h2>Online Order Controls</h2>';
+                echo '<p>Use <strong>Disable Online Orders</strong> to temporarily stop new orders. A banner appears site-wide while disabled.</p>';
+
+                echo '<h2>Admin Email</h2>';
+                echo '<p>Set the destination email for new order notifications under <strong>Admin Order Email</strong> in settings.</p>';
+
+                echo '<h2>Stripe</h2>';
+                echo '<p>Ensure your Stripe <em>Publishable</em> and <em>Secret</em> keys are saved in options <code>flw_stripe_public_key</code> and <code>flw_stripe_secret_key</code>. Charges are created via Payment Intents and confirmed client-side.</p>';
+
+                echo '<h2>Database</h2>';
+                echo '<p>If you update the plugin and are prompted to upgrade the database, use the <strong>Upgrade Database Structure</strong> button at the bottom of the settings page.</p>';
+
+                echo '<h2>Troubleshooting</h2>';
+                echo '<ul>';
+                echo '<li><strong>Cart not updating?</strong> Check browser console and ensure AJAX endpoint is reachable. Nonces are generated via <code>wp_localize_script</code>.</li>';
+                echo '<li><strong>Stripe errors?</strong> Verify keys, and check the <em>Stripe Transactions</em> page for recent charges.</li>';
+                echo '<li><strong>Gift card stock issues?</strong> Stock is computed as configured total minus sold items in order history.</li>';
+                echo '</ul>';
+
+                echo '</div>';
+            }
             public function render_settings_page() {
                 global $wpdb;
                 
@@ -880,6 +1065,26 @@ add_action('plugins_loaded', function () {
                     $global_orders_disabled = isset($_POST['ssc_global_orders_disabled']) ? 1 : 0;
                     update_option( 'ssc_global_orders_disabled', $global_orders_disabled );
                     
+                    // Save gift cards configuration
+                    $gift_cards_clean = [];
+                    if ( isset( $_POST['ssc_enable_gift_cards'] ) ) {
+                        $gift_cards_input = isset( $_POST['gift_cards'] ) && is_array( $_POST['gift_cards'] ) ? $_POST['gift_cards'] : [];
+                        foreach ( $gift_cards_input as $gc ) {
+                            $price   = isset( $gc['price'] ) ? floatval( $gc['price'] ) : 0;
+                            $stock   = isset( $gc['stock'] ) ? intval( $gc['stock'] ) : 0;
+                            $enabled = isset( $gc['enabled'] ) ? 1 : 0;
+                            if ( $price > 0 && $stock >= 0 ) {
+                                $gift_cards_clean[] = [
+                                    'price'   => $price,
+                                    'stock'   => $stock,
+                                    'enabled' => $enabled,
+                                ];
+                            }
+                        }
+                    }
+                    update_option( 'ssc_gift_cards_enabled', isset( $_POST['ssc_enable_gift_cards'] ) ? 1 : 0 );
+                    update_option( 'ssc_gift_cards', $gift_cards_clean );
+
                     echo '<div class="updated"><p>Settings saved.</p></div>';
                     }
                 }
@@ -889,6 +1094,8 @@ add_action('plugins_loaded', function () {
                 $store_hours       = maybe_unserialize( get_option( 'ssc_store_hours', [] ) );
                 $enable_pickup     = get_option( 'ssc_enable_pickup_options', 1 );
                 $global_orders_disabled = get_option( 'ssc_global_orders_disabled', 0 );
+                $gift_cards_enabled = get_option( 'ssc_gift_cards_enabled', 0 );
+                $gift_cards = get_option( 'ssc_gift_cards', [] );
                 
                 // Retrieve pickup types from the database.
                 $pickup_table = $wpdb->prefix . 'flw_pickup_types';
@@ -966,6 +1173,52 @@ add_action('plugins_loaded', function () {
                                 Disable Online Orders
                             </label>
                         </p>
+                        <hr>
+                        <!-- Gift Cards -->
+                        <h2>Gift Cards</h2>
+                        <p>Manage physical gift cards with limited stock. These will render via the <code>[gift_cards]</code> shortcode and can also be added with <code>[add_to_cart]</code> using the standardized name "Gift Card $PRICE".</p>
+                        <p>
+                            <label>
+                                <input type="checkbox" name="ssc_enable_gift_cards" value="1" <?php checked( $gift_cards_enabled, 1 ); ?>>
+                                Enable Gift Cards
+                            </label>
+                        </p>
+                        <div id="gift-cards-container" style="margin-bottom:10px; <?php echo $gift_cards_enabled ? '' : 'display:none;'; ?>">
+                            <table class="widefat">
+                                <thead>
+                                    <tr>
+                                        <th>Enabled</th>
+                                        <th>Denomination (Price)</th>
+                                        <th>Total Stock</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="gift-cards-rows">
+                                    <?php if ( is_array( $gift_cards ) && ! empty( $gift_cards ) ) : ?>
+                                        <?php foreach ( $gift_cards as $idx => $gc ) :
+                                            $gc_price = isset( $gc['price'] ) ? floatval( $gc['price'] ) : 0;
+                                            $gc_stock = isset( $gc['stock'] ) ? intval( $gc['stock'] ) : 0;
+                                            $gc_enabled = ! empty( $gc['enabled'] );
+                                        ?>
+                                        <tr>
+                                            <td><input type="checkbox" name="gift_cards[<?php echo intval( $idx ); ?>][enabled]" <?php checked( $gc_enabled, true ); ?>></td>
+                                            <td><input type="number" step="0.01" min="0" name="gift_cards[<?php echo intval( $idx ); ?>][price]" value="<?php echo esc_attr( $gc_price ); ?>" required></td>
+                                            <td><input type="number" min="0" name="gift_cards[<?php echo intval( $idx ); ?>][stock]" value="<?php echo esc_attr( $gc_stock ); ?>" required></td>
+                                            <td><button type="button" class="button remove-gift-card">Remove</button></td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    <?php else : ?>
+                                        <tr>
+                                            <td><input type="checkbox" name="gift_cards[0][enabled]" checked></td>
+                                            <td><input type="number" step="0.01" min="0" name="gift_cards[0][price]" value="25" required></td>
+                                            <td><input type="number" min="0" name="gift_cards[0][stock]" value="10" required></td>
+                                            <td><button type="button" class="button remove-gift-card">Remove</button></td>
+                                        </tr>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                            <p><button type="button" class="button" id="add-gift-card">Add Denomination</button></p>
+                        </div>
                         <hr>
                         <!-- Store Hours -->
                         <h2>Store Hours</h2>
@@ -1066,6 +1319,24 @@ add_action('plugins_loaded', function () {
                 </form>
                 <script>
                 jQuery(document).ready(function($){
+                    // Gift cards UI toggles
+                    $(document).on('change', 'input[name="ssc_enable_gift_cards"]', function(){
+                        if ($(this).is(':checked')) { $('#gift-cards-container').slideDown(); } else { $('#gift-cards-container').slideUp(); }
+                    });
+                    var gcIndex = $('#gift-cards-rows tr').length;
+                    $('#add-gift-card').on('click', function(){
+                        var row = '<tr>' +
+                            '<td><input type="checkbox" name="gift_cards[' + gcIndex + '][enabled]" checked></td>' +
+                            '<td><input type="number" step="0.01" min="0" name="gift_cards[' + gcIndex + '][price]" value="50" required></td>' +
+                            '<td><input type="number" min="0" name="gift_cards[' + gcIndex + '][stock]" value="10" required></td>' +
+                            '<td><button type="button" class="button remove-gift-card">Remove</button></td>' +
+                        '</tr>';
+                        $('#gift-cards-rows').append(row);
+                        gcIndex++;
+                    });
+                    $(document).on('click', '.remove-gift-card', function(){
+                        $(this).closest('tr').remove();
+                    });
                     var pickupIndex = <?php echo $index; ?>;
                     $("#add-pickup-type").click(function(){
                         var newBlock = `

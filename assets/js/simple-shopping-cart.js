@@ -146,6 +146,13 @@ jQuery(document).ready(function($) {
             }
         }
     }
+    function showCartError(message) {
+        var $container = $("#ss-checkout-response");
+        if ($container.length === 0) {
+            $container = $('<div id="ss-checkout-response"></div>').appendTo('body');
+        }
+        $container.html("<p>Error: " + message + "</p>");
+    }
     function handleCartUpdate(action, productName, price, $element) {
         $.post(sscheckout_params.ajax_url, {
             action: "ssc_update_cart",
@@ -170,7 +177,7 @@ jQuery(document).ready(function($) {
                 }
                 updateCartTotal(newTotal);
             } else {
-                console.log("Error updating cart: " + response.data);
+                showCartError(response.data);
             }
         });
     }
@@ -198,7 +205,7 @@ jQuery(document).ready(function($) {
                 `);
                 updateCartTotal(response.data.cart_total);
             } else {
-                console.log("Error adding to cart: " + response.data);
+                showCartError(response.data);
             }
         });
     });
@@ -210,7 +217,7 @@ jQuery(document).ready(function($) {
         if ($element && $element.length) {
             handleCartUpdate("plus", productName, null, $element);
         } else {
-            console.log("Error: Element not found for increasing quantity.");
+            showCartError("Element not found for increasing quantity.");
         }
     });
     /*** Decrease Quantity ***/
@@ -221,7 +228,7 @@ jQuery(document).ready(function($) {
         if ($element && $element.length) {
             handleCartUpdate("minus", productName, null, $element);
         } else {
-            console.log("Error: Element not found for decreasing quantity.");
+            showCartError("Element not found for decreasing quantity.");
         }
     });
     /*** Remove from Cart and Restore "Add to Cart" ***/
@@ -248,7 +255,7 @@ jQuery(document).ready(function($) {
                 }
                 updateCartTotal(newTotal);
             } else {
-                console.log("Error removing item from cart: " + response.data);
+                showCartError(response.data);
             }
         });
     });
