@@ -953,28 +953,48 @@ add_action('plugins_loaded', function () {
 				}
 				echo '</div>';
 			}
-			public function register_submenu() {
-				FLW_Plugin_Library::add_submenu(
-					'Shopping Cart Settings',
-					'simple-shopping-cart',
-					[ $this, 'render_settings_page' ]
-				);
-				FLW_Plugin_Library::add_submenu(
-					'Order Details',
-					'simple-shopping-cart-order-details',
-					[ $this, 'render_order_details_page' ]
-				);
-				FLW_Plugin_Library::add_submenu(
-					'Stripe Transactions',
-					'simple-shopping-cart-transactions',
-					[ $this, 'render_stripe_transactions_page' ]
-				);
+            public function register_submenu() {
+                // Unified page with tabs
                 FLW_Plugin_Library::add_submenu(
-                    'Instructions',
-                    'simple-shopping-cart-instructions',
-                    [ $this, 'render_instructions_page' ]
+                    'Shopping Cart Plugin',
+                    'simple-shopping-cart',
+                    [ $this, 'render_unified_admin_page' ]
                 );
-			}
+            }
+            /**
+             * Unified admin page with tabs for Settings, Orders, Transactions, Instructions
+             */
+            public function render_unified_admin_page() {
+                $tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'settings';
+                $tabs = [
+                    'settings'     => 'Settings',
+                    'orders'       => 'Orders',
+                    'transactions' => 'Transactions',
+                    'instructions' => 'Instructions',
+                ];
+                echo '<div class="wrap">';
+                echo '<h1>Shopping Cart Plugin</h1>';
+                echo '<h2 class="nav-tab-wrapper">';
+                foreach ( $tabs as $key => $label ) {
+                    $class = $tab === $key ? ' nav-tab-active' : '';
+                    $url = admin_url( 'admin.php?page=simple-shopping-cart&tab=' . $key );
+                    echo '<a href="' . esc_url( $url ) . '" class="nav-tab' . esc_attr( $class ) . '">' . esc_html( $label ) . '</a>';
+                }
+                echo '</h2>';
+                echo '<div class="ssc-tab-content">';
+                // Render selected tab content by reusing existing renderers
+                if ( $tab === 'settings' ) {
+                    $this->render_settings_page();
+                } elseif ( $tab === 'orders' ) {
+                    $this->render_order_details_page();
+                } elseif ( $tab === 'transactions' ) {
+                    $this->render_stripe_transactions_page();
+                } else {
+                    $this->render_instructions_page();
+                }
+                echo '</div>';
+                echo '</div>';
+            }
             public function render_instructions_page() {
                 // Static instructions page for admins
                 echo '<div class="wrap">';
