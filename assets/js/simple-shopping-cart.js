@@ -85,7 +85,21 @@ jQuery(document).ready(function($) {
     }
     /***** Pickup Time Validation *****/
     if (sscheckout_params.enable_pickup) {
-        $("#pickup_date, #pickup_time").on("input change", function() {
+        function isTimeWithinBlocks(dayKey, timeStr) {
+            if (!sscheckout_params.pickup_types || !Array.isArray(sscheckout_params.pickup_types)) return true;
+            var selectedTypeName = $("#pickup_type").val();
+            var selectedType = sscheckout_params.pickup_types.find(function(pt){ return pt.name === selectedTypeName; });
+            if (!selectedType || !selectedType.time_blocks) return true;
+            var blocksForDay = selectedType.time_blocks[dayKey];
+            if (!blocksForDay || !Array.isArray(blocksForDay) || blocksForDay.length === 0) return true;
+            for (var i=0; i<blocksForDay.length; i++) {
+                var parts = (blocksForDay[i] || '').split('-');
+                if (parts.length !== 2) continue;
+                if (timeStr >= parts[0] && timeStr <= parts[1]) return true;
+            }
+            return false;
+        }
+        $("#pickup_date, #pickup_time, #pickup_type").on("input change", function() {
             $("#pickup-time-error").hide().text(""); // Clear error
             var dateStr = $("#pickup_date").val();
             var timeStr = $("#pickup_time").val();
@@ -126,6 +140,14 @@ jQuery(document).ready(function($) {
             });
             if (closedDays.includes(dayNum)) {
                 $("#pickup-time-error").hide().text("The selected day is closed for orders.").fadeIn("slow");
+                $("#ss-checkout-form button[type='submit']").prop("disabled", true);
+                return;
+            }
+            // Enforce allowed time blocks client-side
+            var numToDay = {1:'monday',2:'tuesday',3:'wednesday',4:'thursday',5:'friday',6:'saturday',7:'sunday'};
+            var dayKey = numToDay[dayNum];
+            if (!isTimeWithinBlocks(dayKey, timeStr)) {
+                $("#pickup-time-error").hide().text("The selected time is not available for the chosen pickup type.").fadeIn("slow");
                 $("#ss-checkout-form button[type='submit']").prop("disabled", true);
                 return;
             }

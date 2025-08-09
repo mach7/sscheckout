@@ -233,28 +233,40 @@ add_action('plugins_loaded', function () {
                     'simple-shopping-cart',
                     plugins_url( 'assets/js/simple-shopping-cart.js', __FILE__ ),
                     [ 'jquery' ],
-                    '1.2.0',
+                    '1.3.0',
                     true
                 );
 				global $wpdb;
 				$table = $wpdb->prefix . 'flw_pickup_types';
-				$pickup_types = $wpdb->get_results("SELECT * FROM $table", ARRAY_A);
-				if( is_array($pickup_types) ) {
-					foreach($pickup_types as &$pt) {
-						if ( function_exists('wp_json_decode') ) {
+                $pickup_types = $wpdb->get_results("SELECT * FROM $table", ARRAY_A);
+                if( is_array($pickup_types) ) {
+                    foreach($pickup_types as &$pt) {
+                        if ( function_exists('wp_json_decode') ) {
                             $blocks = wp_json_decode($pt['time_blocks'], true);
                         } else {
                             $blocks = json_decode($pt['time_blocks'], true);
                         }
-					}
-					unset($pt);
-				}
+                        $pt['time_blocks'] = is_array($blocks) ? $blocks : [];
+                    }
+                    unset($pt);
+                }
+                // Derive closed days from Store Hours settings (1=Mon..7=Sun)
+                $store_hours = maybe_unserialize( get_option( 'ssc_store_hours', [] ) );
+                $closed_days = [];
+                $map = [ 'monday'=>1,'tuesday'=>2,'wednesday'=>3,'thursday'=>4,'friday'=>5,'saturday'=>6,'sunday'=>7 ];
+                if ( is_array( $store_hours ) ) {
+                    foreach ( $map as $day_key => $num ) {
+                        if ( isset( $store_hours[$day_key]['closed'] ) && intval( $store_hours[$day_key]['closed'] ) === 1 ) {
+                            $closed_days[] = $num;
+                        }
+                    }
+                }
                 wp_localize_script( 'simple-shopping-cart', 'sscheckout_params', [
                     'ajax_url'       => admin_url( 'admin-ajax.php' ),
                     'publishableKey' => get_option( 'flw_stripe_public_key' ),
                     'enable_pickup'  => get_option( 'ssc_enable_pickup_options', 1 ),
                     'global_restrictions' => [
-                         'closed_days'      => get_option('ssc_closed_days', []),
+                         'closed_days'      => $closed_days,
                          'after_hours_start'=> get_option('ssc_after_hours_start', '18:00'),
                          'after_hours_end'  => get_option('ssc_after_hours_end', '08:00')
                     ],
@@ -657,7 +669,17 @@ add_action('plugins_loaded', function () {
                     if ( ! $pickup_datetime ) {
                         wp_send_json_error( 'Invalid pickup date/time format. Please use the provided date and time pickers.' );
                     }
-                    $closed_days = array_map( 'intval', (array) get_option( 'ssc_closed_days', [] ) );
+                    // Derive closed days from store hours
+                    $closed_days = [];
+                    $store_hours = maybe_unserialize( get_option( 'ssc_store_hours', [] ) );
+                    $map_to_num = [ 'monday'=>1,'tuesday'=>2,'wednesday'=>3,'thursday'=>4,'friday'=>5,'saturday'=>6,'sunday'=>7 ];
+                    if ( is_array( $store_hours ) ) {
+                        foreach ( $map_to_num as $day_key => $num ) {
+                            if ( isset( $store_hours[$day_key]['closed'] ) && intval( $store_hours[$day_key]['closed'] ) === 1 ) {
+                                $closed_days[] = $num;
+                            }
+                        }
+                    }
                     $pickup_day  = intval( $pickup_datetime->format( 'N' ) );
                     if ( in_array( $pickup_day, $closed_days, true ) ) {
                         wp_send_json_error( 'The selected day is closed for orders.' );
@@ -685,10 +707,13 @@ add_action('plugins_loaded', function () {
                     if ( $pickup_datetime < $min_allowed_time ) {
                         wp_send_json_error( 'Pickup time must be at least ' . $min_lead_time_hours . ' hours from now.' );
                     }
-                    $day_of_week = $pickup_datetime->format( 'D' );
-                    if ( isset( $allowed_time_blocks[ $day_of_week ] ) && is_array( $allowed_time_blocks[ $day_of_week ] ) ) {
+                    // Normalize day key to settings format (sunday..saturday)
+                    $dow_num = intval( $pickup_datetime->format( 'N' ) ); // 1=Mon..7=Sun
+                    $num_to_day = [1=>'monday',2=>'tuesday',3=>'wednesday',4=>'thursday',5=>'friday',6=>'saturday',7=>'sunday'];
+                    $day_key = $num_to_day[$dow_num];
+                    if ( isset( $allowed_time_blocks[ $day_key ] ) && is_array( $allowed_time_blocks[ $day_key ] ) ) {
                         $is_valid_time = false;
-                        foreach ( $allowed_time_blocks[ $day_of_week ] as $time_range ) {
+                        foreach ( $allowed_time_blocks[ $day_key ] as $time_range ) {
                             list( $start, $end ) = explode( '-', $time_range );
                             $pickup_time_only = $pickup_datetime->format( 'H:i' );
                             if ( $pickup_time_only >= $start && $pickup_time_only <= $end ) {
@@ -813,8 +838,12 @@ add_action('plugins_loaded', function () {
                 $message .= "Name: " . $name . "\n";
                 if ( ! empty( $email ) ) { $message .= "Email: " . $email . "\n"; }
                 if ( ! empty( $phone ) ) { $message .= "Phone: " . $phone . "\n"; }
-                // Note gift card delivery method (in-store pickup only per configuration)
-                $message .= "\nGift Card Delivery: In-store pickup\n";
+                // If cart contains gift cards, note delivery method
+                $has_gift_card = false;
+                foreach ( $items as $it ) { if ( $this->is_gift_card_product( $it->product_name ) ) { $has_gift_card = true; break; } }
+                if ( $has_gift_card ) {
+                    $message .= "\nGift Card Delivery: In-store pickup\n";
+                }
                 $message .= "\nOrder Details:\n";
                 foreach ( $items as $item ) {
                     $message .= $item->product_name . ' x ' . $item->quantity . ' - $' . $item->product_price . "\n";
