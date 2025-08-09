@@ -129,12 +129,44 @@ jQuery(document).ready(function($) {
             if (!selectedType || !selectedType.time_blocks) return true;
             var blocksForDay = selectedType.time_blocks[dayKey];
             if (!blocksForDay || !Array.isArray(blocksForDay) || blocksForDay.length === 0) return true;
+            // Convert input time to minutes for comparison
+            var inputTime = parseTimeToMinutes(timeStr);
+            if (inputTime === false) return false;
             for (var i=0; i<blocksForDay.length; i++) {
                 var parts = (blocksForDay[i] || '').split('-');
                 if (parts.length !== 2) continue;
-                if (timeStr >= parts[0] && timeStr <= parts[1]) return true;
+                var startMinutes = parseTimeToMinutes(parts[0].trim());
+                var endMinutes = parseTimeToMinutes(parts[1].trim());
+                if (startMinutes === false || endMinutes === false) continue;
+                if (inputTime >= startMinutes && inputTime <= endMinutes) return true;
             }
             return false;
+        }
+        // Parse time string (12-hour like '9:00 AM' or '2:30 PM', or 24-hour like '14:30') to minutes since midnight
+        function parseTimeToMinutes(timeStr) {
+            if (!timeStr) return false;
+            var hours, minutes;
+            if (timeStr.indexOf(':') === -1) return false;
+            var parts = timeStr.split(':');
+            hours = parseInt(parts[0], 10);
+            minutes = parseInt(parts[1], 10);
+            if (isNaN(hours) || isNaN(minutes)) {
+                // Try to handle AM/PM
+                var fullParts = timeStr.toUpperCase().replace(' ', '').split('');
+                var ampm = fullParts.pop();
+                if (ampm === 'M') {
+                    var timePart = fullParts.join('').split(':');
+                    hours = parseInt(timePart[0], 10);
+                    minutes = parseInt(timePart[1], 10);
+                    if (fullParts[fullParts.length-2] === 'P') {
+                        hours += 12;
+                    }
+                } else {
+                    return false;
+                }
+            }
+            if (hours >= 24) hours -= 24; // Normalize in case of 24:00 style
+            return hours * 60 + minutes;
         }
         $("#pickup_date, #pickup_time, #pickup_type, input[name='delivery_method']").on("input change", function() {
             if ($('input[name="delivery_method"]:checked').val() !== 'pickup') {

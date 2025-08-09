@@ -488,7 +488,7 @@ add_action('plugins_loaded', function () {
 					unset($pt);
 				}
                 $enable_pickup = get_option( 'ssc_enable_pickup_options', 1 );
-				?>
+                ?>
                 <div class="ssc-checkout">
                 <h2>Your Cart</h2>
                 <?php if ( $items ) : ?>
@@ -530,17 +530,17 @@ add_action('plugins_loaded', function () {
                 <?php endif; ?>
             
                     <h2>Checkout</h2>
-						<form id="ss-checkout-form">
+                    <form id="ss-checkout-form">
 							<label>Name: <input type="text" name="name"></label><br>
                         <?php if ( ! is_user_logged_in() ) : ?>
 								<label>Email: <input type="email" name="email"></label><br>
 								<label>Password: <input type="password" name="password"></label><br>
                         <?php endif; ?>
-							<label>Phone: <input type="text" name="phone"></label><br>
-
+                        <label>Phone: <input type="text" name="phone"></label><br>
+            
 							<h3>Delivery Method</h3>
 							<label><input type="radio" name="delivery_method" value="shipping" id="delivery_method_shipping" checked> Shipping</label>
-							<?php if ( $enable_pickup ) : ?>
+                        <?php if ( $enable_pickup ) : ?>
 								<label><input type="radio" name="delivery_method" value="pickup" id="delivery_method_pickup"> Pickup</label>
 							<?php endif; ?>
 
@@ -558,29 +558,29 @@ add_action('plugins_loaded', function () {
 
 							<?php if ( $enable_pickup ) : ?>
 								<div id="pickup-fields" style="margin-top:10px; display:none;">
-									<h3>Pickup Options</h3>
-									<label for="pickup_type">Pickup Type:</label>
+                            <h3>Pickup Options</h3>
+                            <label for="pickup_type">Pickup Type:</label>
 									<select name="pickup_type" id="pickup_type">
-										<?php 
-										if ( ! empty( $pickup_types ) && is_array( $pickup_types ) ) {
-											foreach ( $pickup_types as $type ) {
-												echo '<option value="' . esc_attr( $type['name'] ) . '">' . esc_html( $type['name'] ) . '</option>';
-											}
-										} else {
-											echo '<option value="">No pickup types configured</option>';
-										}
-										?>
-									</select>
-									<br>
-									<label for="pickup_date">Pickup Date:</label>
+                                <?php 
+                                if ( ! empty( $pickup_types ) && is_array( $pickup_types ) ) {
+                                    foreach ( $pickup_types as $type ) {
+                                        echo '<option value="' . esc_attr( $type['name'] ) . '">' . esc_html( $type['name'] ) . '</option>';
+                                    }
+                                } else {
+                                    echo '<option value="">No pickup types configured</option>';
+                                }
+                                ?>
+                            </select>
+                            <br>
+                            <label for="pickup_date">Pickup Date:</label>
 									<input type="date" name="pickup_date" id="pickup_date">
-									<br>
-									<label for="pickup_time">Pickup Time:</label>
+                            <br>
+                            <label for="pickup_time">Pickup Time:</label>
 									<input type="time" name="pickup_time" id="pickup_time">
-									<div id="pickup-time-error" style="color:red;"></div>
-									<br><br>
+                            <div id="pickup-time-error" style="color:red;"></div>
+                            <br><br>
 								</div>
-							<?php endif; ?>
+                        <?php endif; ?>
             
                         <h3>Payment Details</h3>
                         <div id="card-element"><!-- Stripe Element will be inserted here --></div>
@@ -1497,7 +1497,7 @@ add_action('plugins_loaded', function () {
                         <hr>
                         <!-- Store Hours -->
                         <h2>Store Hours</h2>
-                        <p>Set the open and close times for each day using the browser’s native time picker. (Note: most browsers will display times in 24‑hour format.)</p>
+                        <p>Set the open and close times for each day using the browser's native time picker. (Note: most browsers will display times in 24‑hour format.)</p>
                         <table class="widefat">
                             <thead>
                                 <tr>
@@ -1529,59 +1529,95 @@ add_action('plugins_loaded', function () {
                         </table>
                         <hr>
                         <!-- Pickup Types Management -->
+                        <div id="pickup-types-management">
                         <h2>Pickup Types Management</h2>
-                        <p>
-                            Define the pickup types for your orders. Each pickup type includes:
-                            <br>- <strong>Name</strong>
-                            <br>- <strong>Minimum Lead Time</strong> (in hours)
-                            <br>- <strong>Allowed Time Blocks</strong> for each day (enter one or more time blocks in the format <code>HH:MM-HH:MM</code> separated by commas)
-                        </p>
-                        <div id="pickup-types-container">
+                            <p>Use this section to configure pickup types with their available time blocks. Times should be entered in 12-hour format (e.g., 9:00 AM - 11:00 AM).</p>
                             <?php
-                            $index = 0;
-                            foreach ( $pickup_types as $pt ):
-                                $pickup_id_attr = !empty($pt['id']) ? ' data-pickup-id="' . esc_attr($pt['id']) . '"' : '';
-                                ?>
-                                <div class="pickup-type" data-index="<?php echo esc_attr( $index ); ?>"<?php echo $pickup_id_attr; ?> style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
-                                    <h3>Pickup Type <?php echo ($index + 1); ?></h3>
-                                    <label>
-                                        Name:
-                                        <input type="text" name="pickup_types[<?php echo $index; ?>][name]" value="<?php echo esc_attr( $pt['name'] ); ?>" required>
-                                    </label>
-                                    <br>
-                                    <label>
-                                        Minimum Lead Time (hours):
-                                        <input type="number" name="pickup_types[<?php echo $index; ?>][min_lead_time]" value="<?php echo esc_attr( $pt['min_lead_time'] ); ?>" min="0" required>
-                                    </label>
-                                    <br>
-                                    <table class="widefat">
+                            global $wpdb;
+                            $table_name = $wpdb->prefix . 'flw_pickup_types';
+                            $pickup_types = $wpdb->get_results( "SELECT * FROM $table_name", ARRAY_A );
+                            if ( empty( $pickup_types ) ) {
+                                echo '<p>No pickup types found. Add your first one below.</p>';
+                            } else {
+                                echo '<h3>Existing Pickup Types</h3>';
+                                echo '<table class="wp-list-table widefat fixed striped">';
+                                echo '<thead><tr><th>Name</th><th>Min Lead Time (hours)</th><th>Time Blocks</th><th>Actions</th></tr></thead>';
+                                echo '<tbody>';
+                                foreach ( $pickup_types as $type ) {
+                                    $time_blocks = maybe_unserialize( $type['time_blocks'] );
+                                    $blocks_display = '';
+                                    if ( is_array( $time_blocks ) ) {
+                                        foreach ( $time_blocks as $day => $blocks ) {
+                                            if ( ! empty( $blocks ) ) {
+                                                $blocks_display .= ucfirst( $day ) . ': ' . implode( ', ', $blocks ) . '<br>';
+                                            }
+                                        }
+                                    }
+                                    if ( empty( $blocks_display ) ) {
+                                        $blocks_display = 'No time blocks set';
+                                    }
+                                    echo '<tr>';
+                                    echo '<td>' . esc_html( $type['name'] ) . '</td>';
+                                    echo '<td>' . esc_html( $type['min_lead_time'] ) . '</td>';
+                                    echo '<td>' . $blocks_display . '</td>';
+                                    echo '<td>';
+                                    echo '<a href="javascript:void(0);" class="button edit-pickup-type" data-id="' . esc_attr( $type['id'] ) . '" data-name="' . esc_attr( $type['name'] ) . '" data-lead-time="' . esc_attr( $type['min_lead_time'] ) . '" data-blocks="' . esc_attr( json_encode( $time_blocks ) ) . '">Edit</a> ';
+                                    echo '<a href="javascript:void(0);" class="button delete-pickup-type" data-id="' . esc_attr( $type['id'] ) . '">Delete</a>';
+                                    echo '</td>';
+                                    echo '</tr>';
+                                }
+                                echo '</tbody>';
+                                echo '</table>';
+                            }
+                            ?>
+                            <h3>Add/Edit Pickup Type</h3>
+                            <div id="pickup-type-form-container">
+                                <form id="pickup-type-form" method="post">
+                                    <input type="hidden" name="action" value="ssc_save_pickup_type">
+                                    <input type="hidden" name="pickup_type_id" id="pickup_type_id" value="">
+                                    <p>
+                                        <label for="pickup_type_name">Pickup Type Name:</label><br>
+                                        <input type="text" id="pickup_type_name" name="pickup_type_name" required style="width: 300px;">
+                                    </p>
+                                    <p>
+                                        <label for="min_lead_time">Minimum Lead Time (hours):</label><br>
+                                        <input type="number" id="min_lead_time" name="min_lead_time" min="0" value="0" required style="width: 100px;">
+                                    </p>
+                                    <h4>Time Blocks (12-hour format, e.g., 9:00 AM - 11:00 AM)</h4>
+                                    <table class="wp-list-table widefat fixed">
                                         <thead>
                                             <tr>
                                                 <th>Day</th>
-                                                <th>Allowed Time Blocks (comma separated)</th>
+                                                <th>Time Blocks (Start - End)</th>
+                                                <th>Action</th>
                                             </tr>
                                         </thead>
-                                        <tbody>
-                                            <?php foreach ($days as $day_key => $day_name): 
-                                                $tb = isset($pt['time_blocks'][$day_key]) ? $pt['time_blocks'][$day_key] : '';
-                                                ?>
-                                                <tr>
-                                                    <td><?php echo esc_html($day_name); ?></td>
-                                                    <td>
-                                                        <input type="text" name="pickup_types[<?php echo $index; ?>][time_blocks][<?php echo esc_attr($day_key); ?>]" value="<?php echo esc_attr($tb); ?>" placeholder="e.g., 08:00-10:00">
-                                                    </td>
-                                                </tr>
-                                            <?php endforeach; ?>
+                                        <tbody id="time-blocks-tbody">
+                                            <?php
+                                            $days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+                                            foreach ( $days as $day ) {
+                                                echo '<tr data-day="' . esc_attr( $day ) . '">';
+                                                echo '<td>' . ucfirst( $day ) . '</td>';
+                                                echo '<td class="time-blocks-container">';
+                                                echo '<div class="time-block-row">';
+                                                echo '<input type="text" name="time_blocks[' . $day . '][0][start]" placeholder="Start (e.g., 9:00 AM)" style="width: 150px; margin-right: 10px;">';
+                                                echo '<input type="text" name="time_blocks[' . $day . '][0][end]" placeholder="End (e.g., 11:00 AM)" style="width: 150px;">';
+                                                echo '<button type="button" class="button remove-time-block" style="margin-left: 10px; display: none;">Remove</button>';
+                                                echo '</div>';
+                                                echo '</td>';
+                                                echo '<td><button type="button" class="button add-time-block" data-day="' . esc_attr( $day ) . '">Add Time Block</button></td>';
+                                                echo '</tr>';
+                                            }
+                                            ?>
                                         </tbody>
                                     </table>
-                                    <button type="button" class="remove-pickup-type">Remove This Pickup Type</button>
+                                    <p>
+                                        <input type="submit" value="Save Pickup Type" class="button-primary">
+                                        <button type="button" id="cancel-edit" class="button" style="display: none;">Cancel Edit</button>
+                                    </p>
+                                </form>
                                 </div>
-                                <?php
-                                $index++;
-                            endforeach;
-                            ?>
                         </div>
-                        <button type="button" id="add-pickup-type">Add Pickup Type</button>
                         <hr>
                         <?php submit_button( 'Save Settings', 'primary', 'ssc_save_settings' ); ?>
                     </form>
@@ -1593,108 +1629,107 @@ add_action('plugins_loaded', function () {
                     <?php submit_button( 'Upgrade Database Structure', 'secondary', 'upgrade_db' ); ?>
                 </form>
                 <script>
-                jQuery(document).ready(function($){
-                    // Gift cards UI toggles
-                    $(document).on('change', 'input[name="ssc_enable_gift_cards"]', function(){
-                        if ($(this).is(':checked')) { $('#gift-cards-container').slideDown(); } else { $('#gift-cards-container').slideUp(); }
+                jQuery(document).ready(function($) {
+                    // Add new time block row for a day
+                    $(document).on('click', '.add-time-block', function() {
+                        var day = $(this).data('day');
+                        var $container = $(this).closest('tr').find('.time-blocks-container');
+                        var index = $container.find('.time-block-row').length;
+                        var newRow = '<div class="time-block-row">' +
+                            '<input type="text" name="time_blocks[' + day + '][' + index + '][start]" placeholder="Start (e.g., 9:00 AM)" style="width: 150px; margin-right: 10px;">' +
+                            '<input type="text" name="time_blocks[' + day + '][' + index + '][end]" placeholder="End (e.g., 11:00 AM)" style="width: 150px;">' +
+                            '<button type="button" class="button remove-time-block" style="margin-left: 10px;">Remove</button>' +
+                            '</div>';
+                        $container.append(newRow);
+                        updateRemoveButtons($container);
                     });
-                    var gcIndex = $('#gift-cards-rows tr').length;
-                    $('#add-gift-card').on('click', function(){
-                        var row = '<tr>' +
-                            '<td><input type="checkbox" name="gift_cards[' + gcIndex + '][enabled]" checked></td>' +
-                            '<td><input type="number" step="0.01" min="0" name="gift_cards[' + gcIndex + '][price]" value="50" required></td>' +
-                            '<td><input type="number" min="0" name="gift_cards[' + gcIndex + '][stock]" value="10" required></td>' +
-                            '<td><button type="button" class="button remove-gift-card">Remove</button></td>' +
-                        '</tr>';
-                        $('#gift-cards-rows').append(row);
-                        gcIndex++;
+
+                    // Remove a time block row
+                    $(document).on('click', '.remove-time-block', function() {
+                        var $container = $(this).closest('.time-blocks-container');
+                        $(this).closest('.time-block-row').remove();
+                        updateRemoveButtons($container);
                     });
-                    $(document).on('click', '.remove-gift-card', function(){
-                        $(this).closest('tr').remove();
-                    });
-                    var pickupIndex = <?php echo $index; ?>;
-                    $("#add-pickup-type").click(function(){
-                        var newBlock = `
-                        <div class="pickup-type" data-index="` + pickupIndex + `" style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
-                            <h3>Pickup Type ` + (pickupIndex + 1) + `</h3>
-                            <label>
-                                Name: <input type="text" name="pickup_types[` + pickupIndex + `][name]" value="" required>
-                            </label>
-                            <br>
-                            <label>
-                                Minimum Lead Time (hours): <input type="number" name="pickup_types[` + pickupIndex + `][min_lead_time]" value="0" min="0" required>
-                            </label>
-                            <br>
-                            <table class="widefat">
-                                <thead>
-                                    <tr>
-                                        <th>Day</th>
-                                        <th>Allowed Time Blocks (comma separated)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>Sunday</td>
-                                        <td><input type="text" name="pickup_types[` + pickupIndex + `][time_blocks][sunday]" placeholder="e.g., 08:00-10:00"></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Monday</td>
-                                        <td><input type="text" name="pickup_types[` + pickupIndex + `][time_blocks][monday]" placeholder="e.g., 08:00-10:00"></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Tuesday</td>
-                                        <td><input type="text" name="pickup_types[` + pickupIndex + `][time_blocks][tuesday]" placeholder="e.g., 08:00-10:00"></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Wednesday</td>
-                                        <td><input type="text" name="pickup_types[` + pickupIndex + `][time_blocks][wednesday]" placeholder="e.g., 08:00-10:00"></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Thursday</td>
-                                        <td><input type="text" name="pickup_types[` + pickupIndex + `][time_blocks][thursday]" placeholder="e.g., 08:00-10:00"></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Friday</td>
-                                        <td><input type="text" name="pickup_types[` + pickupIndex + `][time_blocks][friday]" placeholder="e.g., 08:00-10:00"></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Saturday</td>
-                                        <td><input type="text" name="pickup_types[` + pickupIndex + `][time_blocks][saturday]" placeholder="e.g., 08:00-10:00"></td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                            <button type="button" class="remove-pickup-type">Remove This Pickup Type</button>
-                        </div>`;
-                        $("#pickup-types-container").append(newBlock);
-                        pickupIndex++;
-                    });
-                    
-                    $(document).on("click", ".remove-pickup-type", function(){
-                        var $block = $(this).closest(".pickup-type");
-                        var pickupID = $block.data("pickup-id");
-                        if ( pickupID ) {
-                            $.ajax({
-                                url: sscheckout_params.ajax_url,
-                                type: "POST",
-                                data: {
-                                    action: "ssc_remove_pickup_type",
-                                    pickup_id: pickupID,
-                                    nonce: "<?php echo $remove_nonce; ?>"
-                                },
-                                success: function(response) {
-                                    if (response.success) {
-                                        $block.remove();
+
+                    function updateRemoveButtons($container) {
+                        var $rows = $container.find('.time-block-row');
+                        if ($rows.length > 1) {
+                            $rows.find('.remove-time-block').show();
                                     } else {
-                                        alert("Error: " + response.data);
-                                    }
-                                },
-                                error: function() {
-                                    alert("AJAX error while removing pickup type.");
-                                }
-                            });
-                        } else {
-                            $block.remove();
+                            $rows.find('.remove-time-block').hide();
                         }
+                    }
+
+                    // Edit existing pickup type
+                    $('.edit-pickup-type').on('click', function() {
+                        var id = $(this).data('id');
+                        var name = $(this).data('name');
+                        var leadTime = $(this).data('lead-time');
+                        var blocks = $(this).data('blocks');
+                        $('#pickup_type_id').val(id);
+                        $('#pickup_type_name').val(name);
+                        $('#min_lead_time').val(leadTime);
+                        // Reset time blocks UI
+                        $('#time-blocks-tbody tr').each(function() {
+                            var $tr = $(this);
+                            var day = $tr.data('day');
+                            var $container = $tr.find('.time-blocks-container');
+                            $container.empty();
+                            var dayBlocks = blocks && blocks[day] ? blocks[day] : [];
+                            if (dayBlocks.length === 0) {
+                                $container.append(getTimeBlockRow(day, 0, '', ''));
+                            } else {
+                                for (var i = 0; i < dayBlocks.length; i++) {
+                                    var times = dayBlocks[i].split('-');
+                                    var start = times[0] ? times[0].trim() : '';
+                                    var end = times[1] ? times[1].trim() : '';
+                                    $container.append(getTimeBlockRow(day, i, start, end));
+                                }
+                            }
+                            updateRemoveButtons($container);
+                        });
+                        $('#cancel-edit').show();
+                        $('#pickup-type-form-container h3').text('Edit Pickup Type');
+                        $('html, body').animate({ scrollTop: $('#pickup-type-form-container').offset().top }, 500);
+                    });
+
+                    function getTimeBlockRow(day, index, start, end) {
+                        return '<div class="time-block-row">' +
+                            '<input type="text" name="time_blocks[' + day + '][' + index + '][start]" value="' + start + '" placeholder="Start (e.g., 9:00 AM)" style="width: 150px; margin-right: 10px;">' +
+                            '<input type="text" name="time_blocks[' + day + '][' + index + '][end]" value="' + end + '" placeholder="End (e.g., 11:00 AM)" style="width: 150px;">' +
+                            '<button type="button" class="button remove-time-block" style="margin-left: 10px; display: none;">Remove</button>' +
+                            '</div>';
+                    }
+
+                    $('#cancel-edit').on('click', function() {
+                        $('#pickup_type_id').val('');
+                        $('#pickup_type_name').val('');
+                        $('#min_lead_time').val('0');
+                        $('#time-blocks-tbody tr').each(function() {
+                            var day = $(this).data('day');
+                            var $container = $(this).find('.time-blocks-container');
+                            $container.html(getTimeBlockRow(day, 0, '', ''));
+                            updateRemoveButtons($container);
+                        });
+                        $(this).hide();
+                        $('#pickup-type-form-container h3').text('Add/Edit Pickup Type');
+                    });
+
+                    // Delete pickup type via AJAX
+                    $('.delete-pickup-type').on('click', function() {
+                        if (!confirm('Are you sure you want to delete this pickup type?')) return;
+                        var id = $(this).data('id');
+                        $.post(ajaxurl, {
+                            action: 'ssc_remove_pickup_type',
+                            id: id
+                        }, function(response) {
+                            if (response.success) {
+                                alert('Pickup type deleted.');
+                                location.reload();
+                        } else {
+                                alert('Error: ' + response.data);
+                        }
+                        });
                     });
                 });
                 </script>
@@ -1732,3 +1767,41 @@ add_action('plugins_loaded', function () {
 		});
 	}
 });
+
+// Process form submission for pickup types.
+if ( isset( $_POST['action'] ) && $_POST['action'] === 'ssc_save_pickup_type' ) {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'flw_pickup_types';
+    $id = isset( $_POST['pickup_type_id'] ) ? intval( $_POST['pickup_type_id'] ) : 0;
+    $name = sanitize_text_field( $_POST['pickup_type_name'] );
+    $min_lead_time = intval( $_POST['min_lead_time'] );
+    $time_blocks_raw = isset( $_POST['time_blocks'] ) ? (array) $_POST['time_blocks'] : [];
+    // Process time blocks into a structured array.
+    $time_blocks = [];
+    foreach ( $time_blocks_raw as $day => $blocks ) {
+        $day = sanitize_text_field( $day );
+        $day_blocks = [];
+        foreach ( $blocks as $block ) {
+            $start = isset( $block['start'] ) ? sanitize_text_field( $block['start'] ) : '';
+            $end = isset( $block['end'] ) ? sanitize_text_field( $block['end'] ) : '';
+            if ( ! empty( $start ) && ! empty( $end ) ) {
+                $day_blocks[] = $start . ' - ' . $end;
+            }
+        }
+        if ( ! empty( $day_blocks ) ) {
+            $time_blocks[ $day ] = $day_blocks;
+        }
+    }
+    $data = [
+        'name' => $name,
+        'min_lead_time' => $min_lead_time,
+        'time_blocks' => serialize( $time_blocks ),
+    ];
+    if ( $id > 0 ) {
+        $wpdb->update( $table_name, $data, ['id' => $id] );
+        echo '<div class="updated"><p>Pickup type updated.</p></div>';
+    } else {
+        $wpdb->insert( $table_name, $data );
+        echo '<div class="updated"><p>Pickup type added.</p></div>';
+    }
+}
