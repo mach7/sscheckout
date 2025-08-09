@@ -19,6 +19,24 @@ jQuery(document).ready(function($) {
             var displayError = $("#card-errors");
             displayError.text(event.error ? event.error.message : "");
         });
+
+        // Toggle delivery method sections
+        function toggleDeliveryFields() {
+            var method = $('input[name="delivery_method"]:checked').val();
+            if (method === 'pickup') {
+                $('#pickup-fields').slideDown('fast');
+                $('#shipping-fields').slideUp('fast');
+            } else {
+                $('#shipping-fields').slideDown('fast');
+                $('#pickup-fields').slideUp('fast');
+                // Clear any pickup validation error and enable submit
+                $("#pickup-time-error").hide().text("");
+                $("#ss-checkout-form button[type='submit']").prop("disabled", false);
+            }
+        }
+        $(document).on('change', 'input[name="delivery_method"]', toggleDeliveryFields);
+        toggleDeliveryFields();
+
         $("#ss-checkout-form").submit(async function(e) {
             e.preventDefault();
             var $form = $(this);
@@ -30,9 +48,17 @@ jQuery(document).ready(function($) {
                 name: $("input[name='name']").val(),
                 email: $("input[name='email']").val(),
                 phone: $("input[name='phone']").val(),
+                delivery_method: $('input[name="delivery_method"]:checked').val(),
                 pickup_type: $("#pickup_type").val(),
                 pickup_date: $("#pickup_date").val(),
-                pickup_time: $("#pickup_time").val()
+                pickup_time: $("#pickup_time").val(),
+                ship_name: $("input[name='ship_name']").val(),
+                ship_address1: $("input[name='ship_address1']").val(),
+                ship_address2: $("input[name='ship_address2']").val(),
+                ship_city: $("input[name='ship_city']").val(),
+                ship_state: $("input[name='ship_state']").val(),
+                ship_postal: $("input[name='ship_postal']").val(),
+                ship_country: $("input[name='ship_country']").val()
             };
             try {
                 const intentResp = await $.post(sscheckout_params.ajax_url, createPayload);
@@ -67,7 +93,18 @@ jQuery(document).ready(function($) {
                     name: billingDetails.name,
                     email: billingDetails.email,
                     password: $("input[name='password']").val(),
-                    phone: billingDetails.phone
+                    phone: billingDetails.phone,
+                    delivery_method: $('input[name="delivery_method"]:checked').val(),
+                    pickup_type: $("#pickup_type").val(),
+                    pickup_date: $("#pickup_date").val(),
+                    pickup_time: $("#pickup_time").val(),
+                    ship_name: $("input[name='ship_name']").val(),
+                    ship_address1: $("input[name='ship_address1']").val(),
+                    ship_address2: $("input[name='ship_address2']").val(),
+                    ship_city: $("input[name='ship_city']").val(),
+                    ship_state: $("input[name='ship_state']").val(),
+                    ship_postal: $("input[name='ship_postal']").val(),
+                    ship_country: $("input[name='ship_country']").val()
                 };
                 const finalizeResp = await $.post(sscheckout_params.ajax_url, finalizePayload);
                 if (finalizeResp.success) {
@@ -99,7 +136,12 @@ jQuery(document).ready(function($) {
             }
             return false;
         }
-        $("#pickup_date, #pickup_time, #pickup_type").on("input change", function() {
+        $("#pickup_date, #pickup_time, #pickup_type, input[name='delivery_method']").on("input change", function() {
+            if ($('input[name="delivery_method"]:checked').val() !== 'pickup') {
+                $("#pickup-time-error").hide().text("");
+                $("#ss-checkout-form button[type='submit']").prop("disabled", false);
+                return;
+            }
             $("#pickup-time-error").hide().text(""); // Clear error
             var dateStr = $("#pickup_date").val();
             var timeStr = $("#pickup_time").val();

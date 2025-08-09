@@ -77,6 +77,7 @@ add_action('plugins_loaded', function () {
 			 */
             public function __construct() {
                 register_activation_hook( __FILE__, [ __CLASS__, 'activate' ] );
+                register_deactivation_hook( __FILE__, [ __CLASS__, 'deactivate' ] );
                 add_action( 'init', [ $this, 'maybe_create_tables' ] );
                 add_action( 'init', [ $this, 'register_shortcodes' ] );
                 add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_scripts' ] );
@@ -157,6 +158,31 @@ add_action('plugins_loaded', function () {
 					PRIMARY KEY (id)
 				) $charset_collate;";
 				dbDelta( $sql3 );
+				// Orders (master) table for shipping/pickup and customer details.
+				$table4 = $wpdb->prefix . 'flw_orders';
+				$sql4 = "CREATE TABLE $table4 (
+					id mediumint(9) NOT NULL AUTO_INCREMENT,
+					uid varchar(100) NOT NULL,
+					order_id varchar(100) NOT NULL,
+					customer_name varchar(255) DEFAULT '',
+					email varchar(255) DEFAULT '',
+					phone varchar(100) DEFAULT '',
+					delivery_method varchar(20) DEFAULT 'shipping',
+					pickup_type varchar(255) DEFAULT '',
+					pickup_date varchar(20) DEFAULT '',
+					pickup_time varchar(20) DEFAULT '',
+					ship_name varchar(255) DEFAULT '',
+					ship_address1 varchar(255) DEFAULT '',
+					ship_address2 varchar(255) DEFAULT '',
+					ship_city varchar(100) DEFAULT '',
+					ship_state varchar(100) DEFAULT '',
+					ship_postal varchar(50) DEFAULT '',
+					ship_country varchar(100) DEFAULT '',
+					created_at datetime DEFAULT CURRENT_TIMESTAMP,
+					PRIMARY KEY (id),
+					UNIQUE KEY order_uid (order_id, uid)
+				) $charset_collate;";
+				dbDelta( $sql4 );
 			}
 			/**
 			 * Checks if the custom tables exist; if not, calls activation.
@@ -166,10 +192,12 @@ add_action('plugins_loaded', function () {
 				$table1 = $wpdb->prefix . 'flw_shopping_cart';
 				$table2 = $wpdb->prefix . 'flw_order_history';
 				$table3 = $wpdb->prefix . 'flw_pickup_types';
+				$table4 = $wpdb->prefix . 'flw_orders';
 				$exists1 = $wpdb->get_var( $wpdb->prepare( "SHOW TABLES LIKE %s", $table1 ) );
 				$exists2 = $wpdb->get_var( $wpdb->prepare( "SHOW TABLES LIKE %s", $table2 ) );
 				$exists3 = $wpdb->get_var( $wpdb->prepare( "SHOW TABLES LIKE %s", $table3 ) );
-				if ( ! $exists1 || ! $exists2 || ! $exists3 ) {
+				$exists4 = $wpdb->get_var( $wpdb->prepare( "SHOW TABLES LIKE %s", $table4 ) );
+				if ( ! $exists1 || ! $exists2 || ! $exists3 || ! $exists4 ) {
 					self::activate();
 				}
 			}
@@ -205,6 +233,7 @@ add_action('plugins_loaded', function () {
 				) $charset_collate;";
 				dbDelta( $sql2 );
 				$table3 = $wpdb->prefix . 'flw_pickup_types';
+				$table4 = $wpdb->prefix . 'flw_orders';
 				$sql3 = "CREATE TABLE $table3 (
 					id mediumint(9) NOT NULL AUTO_INCREMENT,
 					name varchar(255) NOT NULL,
@@ -214,6 +243,29 @@ add_action('plugins_loaded', function () {
 					PRIMARY KEY (id)
 				) $charset_collate;";
 				dbDelta( $sql3 );
+				$sql4 = "CREATE TABLE $table4 (
+					id mediumint(9) NOT NULL AUTO_INCREMENT,
+					uid varchar(100) NOT NULL,
+					order_id varchar(100) NOT NULL,
+					customer_name varchar(255) DEFAULT '',
+					email varchar(255) DEFAULT '',
+					phone varchar(100) DEFAULT '',
+					delivery_method varchar(20) DEFAULT 'shipping',
+					pickup_type varchar(255) DEFAULT '',
+					pickup_date varchar(20) DEFAULT '',
+					pickup_time varchar(20) DEFAULT '',
+					ship_name varchar(255) DEFAULT '',
+					ship_address1 varchar(255) DEFAULT '',
+					ship_address2 varchar(255) DEFAULT '',
+					ship_city varchar(100) DEFAULT '',
+					ship_state varchar(100) DEFAULT '',
+					ship_postal varchar(50) DEFAULT '',
+					ship_country varchar(100) DEFAULT '',
+					created_at datetime DEFAULT CURRENT_TIMESTAMP,
+					PRIMARY KEY (id),
+					UNIQUE KEY order_uid (order_id, uid)
+				) $charset_collate;";
+				dbDelta( $sql4 );
 				echo '<div class="updated"><p>Database upgraded successfully.</p></div>';
 			}
 			/**
@@ -372,6 +424,44 @@ add_action('plugins_loaded', function () {
                 echo '</div>';
                 return ob_get_clean();
             }
+
+            /**
+             * Plugin deactivation callback – conditionally remove all plugin data.
+             */
+            public static function deactivate() {
+                $remove_all = get_option( 'ssc_remove_on_deactivation', 0 );
+                if ( intval( $remove_all ) !== 1 ) {
+                    return;
+                }
+                global $wpdb;
+                $tables = [
+                    $wpdb->prefix . 'flw_shopping_cart',
+                    $wpdb->prefix . 'flw_order_history',
+                    $wpdb->prefix . 'flw_pickup_types',
+                    $wpdb->prefix . 'flw_orders',
+                ];
+                foreach ( $tables as $tbl ) {
+                    // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+                    $wpdb->query( "DROP TABLE IF EXISTS {$tbl}" );
+                }
+                $options = [
+                    'ssc_order_admin_email',
+                    'ssc_store_hours',
+                    'ssc_enable_pickup_options',
+                    'ssc_global_orders_disabled',
+                    'ssc_gift_cards_enabled',
+                    'ssc_gift_cards',
+                    'ssc_after_hours_start',
+                    'ssc_after_hours_end',
+                    'flw_stripe_public_key',
+                    'flw_stripe_secret_key',
+                ];
+                foreach ( $options as $opt ) {
+                    delete_option( $opt );
+                }
+                // Finally remove the flag option itself.
+                delete_option( 'ssc_remove_on_deactivation' );
+            }
 			/**
 			 * [checkout] shortcode output.
 			 */
@@ -398,7 +488,7 @@ add_action('plugins_loaded', function () {
 					unset($pt);
 				}
                 $enable_pickup = get_option( 'ssc_enable_pickup_options', 1 );
-                ?>
+				?>
                 <div class="ssc-checkout">
                 <h2>Your Cart</h2>
                 <?php if ( $items ) : ?>
@@ -440,37 +530,57 @@ add_action('plugins_loaded', function () {
                 <?php endif; ?>
             
                     <h2>Checkout</h2>
-                    <form id="ss-checkout-form">
-                        <label>Name: <input type="text" name="name" required></label><br>
+						<form id="ss-checkout-form">
+							<label>Name: <input type="text" name="name"></label><br>
                         <?php if ( ! is_user_logged_in() ) : ?>
-                            <label>Email: <input type="email" name="email" required></label><br>
-                            <label>Password: <input type="password" name="password" required></label><br>
+								<label>Email: <input type="email" name="email"></label><br>
+								<label>Password: <input type="password" name="password"></label><br>
                         <?php endif; ?>
-                        <label>Phone: <input type="text" name="phone"></label><br>
-            
-                        <?php if ( $enable_pickup ) : ?>
-                            <h3>Pickup Options</h3>
-                            <label for="pickup_type">Pickup Type:</label>
-                            <select name="pickup_type" id="pickup_type" required>
-                                <?php 
-                                if ( ! empty( $pickup_types ) && is_array( $pickup_types ) ) {
-                                    foreach ( $pickup_types as $type ) {
-                                        echo '<option value="' . esc_attr( $type['name'] ) . '">' . esc_html( $type['name'] ) . '</option>';
-                                    }
-                                } else {
-                                    echo '<option value="">No pickup types configured</option>';
-                                }
-                                ?>
-                            </select>
-                            <br>
-                            <label for="pickup_date">Pickup Date:</label>
-                            <input type="date" name="pickup_date" id="pickup_date" required>
-                            <br>
-                            <label for="pickup_time">Pickup Time:</label>
-                            <input type="time" name="pickup_time" id="pickup_time" required>
-                            <div id="pickup-time-error" style="color:red;"></div>
-                            <br><br>
-                        <?php endif; ?>
+							<label>Phone: <input type="text" name="phone"></label><br>
+
+							<h3>Delivery Method</h3>
+							<label><input type="radio" name="delivery_method" value="shipping" id="delivery_method_shipping" checked> Shipping</label>
+							<?php if ( $enable_pickup ) : ?>
+								<label><input type="radio" name="delivery_method" value="pickup" id="delivery_method_pickup"> Pickup</label>
+							<?php endif; ?>
+
+							<div id="shipping-fields" style="margin-top:10px;">
+								<h3>Shipping Address</h3>
+								<label>Recipient Name: <input type="text" name="ship_name"></label><br>
+								<label>Address Line 1: <input type="text" name="ship_address1"></label><br>
+								<label>Address Line 2: <input type="text" name="ship_address2"></label><br>
+								<label>City: <input type="text" name="ship_city"></label><br>
+								<label>State/Province: <input type="text" name="ship_state"></label><br>
+								<label>Postal Code: <input type="text" name="ship_postal"></label><br>
+								<label>Country: <input type="text" name="ship_country" value="US"></label><br>
+								<div id="shipping-error" style="color:red;"></div>
+							</div>
+
+							<?php if ( $enable_pickup ) : ?>
+								<div id="pickup-fields" style="margin-top:10px; display:none;">
+									<h3>Pickup Options</h3>
+									<label for="pickup_type">Pickup Type:</label>
+									<select name="pickup_type" id="pickup_type">
+										<?php 
+										if ( ! empty( $pickup_types ) && is_array( $pickup_types ) ) {
+											foreach ( $pickup_types as $type ) {
+												echo '<option value="' . esc_attr( $type['name'] ) . '">' . esc_html( $type['name'] ) . '</option>';
+											}
+										} else {
+											echo '<option value="">No pickup types configured</option>';
+										}
+										?>
+									</select>
+									<br>
+									<label for="pickup_date">Pickup Date:</label>
+									<input type="date" name="pickup_date" id="pickup_date">
+									<br>
+									<label for="pickup_time">Pickup Time:</label>
+									<input type="time" name="pickup_time" id="pickup_time">
+									<div id="pickup-time-error" style="color:red;"></div>
+									<br><br>
+								</div>
+							<?php endif; ?>
             
                         <h3>Payment Details</h3>
                         <div id="card-element"><!-- Stripe Element will be inserted here --></div>
@@ -664,9 +774,10 @@ add_action('plugins_loaded', function () {
                 $name     = sanitize_text_field( wp_unslash( $_POST['name'] ?? '' ) );
                 $email    = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
                 $phone    = sanitize_text_field( wp_unslash( $_POST['phone'] ?? '' ) );
+                $delivery_method = isset( $_POST['delivery_method'] ) ? sanitize_text_field( wp_unslash( $_POST['delivery_method'] ) ) : 'shipping';
                 $enable_pickup = get_option( 'ssc_enable_pickup_options', 1 );
                 $pickup_type = $pickup_date = $pickup_time = '';
-                if ( $enable_pickup ) {
+                if ( $enable_pickup && $delivery_method === 'pickup' ) {
                     $pickup_type = sanitize_text_field( wp_unslash( $_POST['pickup_type'] ?? '' ) );
                     $pickup_date = sanitize_text_field( wp_unslash( $_POST['pickup_date'] ?? '' ) );
                     $pickup_time = sanitize_text_field( wp_unslash( $_POST['pickup_time'] ?? '' ) );
@@ -732,6 +843,19 @@ add_action('plugins_loaded', function () {
                         }
                     }
                 }
+                // Shipping fields (validate if delivery is shipping)
+                $ship_name    = sanitize_text_field( wp_unslash( $_POST['ship_name'] ?? '' ) );
+                $ship_address1= sanitize_text_field( wp_unslash( $_POST['ship_address1'] ?? '' ) );
+                $ship_address2= sanitize_text_field( wp_unslash( $_POST['ship_address2'] ?? '' ) );
+                $ship_city    = sanitize_text_field( wp_unslash( $_POST['ship_city'] ?? '' ) );
+                $ship_state   = sanitize_text_field( wp_unslash( $_POST['ship_state'] ?? '' ) );
+                $ship_postal  = sanitize_text_field( wp_unslash( $_POST['ship_postal'] ?? '' ) );
+                $ship_country = sanitize_text_field( wp_unslash( $_POST['ship_country'] ?? 'US' ) );
+                if ( $delivery_method === 'shipping' ) {
+                    if ( empty( $ship_name ) || empty( $ship_address1 ) || empty( $ship_city ) || empty( $ship_state ) || empty( $ship_postal ) || empty( $ship_country ) ) {
+                        wp_send_json_error( 'Please complete all required shipping address fields.' );
+                    }
+                }
                 $uid = $this->get_user_uid();
                 global $wpdb;
                 $cart_table = $wpdb->prefix . 'flw_shopping_cart';
@@ -763,12 +887,33 @@ add_action('plugins_loaded', function () {
                 }
                 $order_id = 'ORDER-' . time();
                 $ch = curl_init( 'https://api.stripe.com/v1/payment_intents' );
-                $intent_data = http_build_query( [
+                $intent_args = [
                     'amount'             => $amount,
                     'currency'           => 'usd',
                     'description'        => 'Charge for ' . $name,
                     'metadata[order_id]' => $order_id,
-                ] );
+                    'metadata[delivery_method]' => $delivery_method,
+                ];
+                if ( ! empty( $email ) ) {
+                    $intent_args['receipt_email'] = $email;
+                }
+                if ( $delivery_method === 'pickup' ) {
+                    $intent_args['metadata[pickup_type]'] = $pickup_type;
+                    $intent_args['metadata[pickup_date]'] = $pickup_date;
+                    $intent_args['metadata[pickup_time]'] = $pickup_time;
+                } else {
+                    // Attach shipping to PaymentIntent for better fraud signals
+                    $intent_args['shipping[name]'] = $ship_name;
+                    $intent_args['shipping[address][line1]'] = $ship_address1;
+                    if ( ! empty( $ship_address2 ) ) {
+                        $intent_args['shipping[address][line2]'] = $ship_address2;
+                    }
+                    $intent_args['shipping[address][city]']    = $ship_city;
+                    $intent_args['shipping[address][state]']   = $ship_state;
+                    $intent_args['shipping[address][postal_code]'] = $ship_postal;
+                    $intent_args['shipping[address][country]'] = $ship_country;
+                }
+                $intent_data = http_build_query( $intent_args );
                 curl_setopt( $ch, CURLOPT_USERPWD, $stripe_secret . ':' );
                 curl_setopt( $ch, CURLOPT_POST, true );
                 curl_setopt( $ch, CURLOPT_POSTFIELDS, $intent_data );
@@ -794,6 +939,15 @@ add_action('plugins_loaded', function () {
                 $email    = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
                 $password = isset( $_POST['password'] ) ? wp_unslash( $_POST['password'] ) : '';
                 $phone    = sanitize_text_field( wp_unslash( $_POST['phone'] ?? '' ) );
+                $delivery_method = isset( $_POST['delivery_method'] ) ? sanitize_text_field( wp_unslash( $_POST['delivery_method'] ) ) : 'shipping';
+                // Shipping fields
+                $ship_name    = sanitize_text_field( wp_unslash( $_POST['ship_name'] ?? '' ) );
+                $ship_address1= sanitize_text_field( wp_unslash( $_POST['ship_address1'] ?? '' ) );
+                $ship_address2= sanitize_text_field( wp_unslash( $_POST['ship_address2'] ?? '' ) );
+                $ship_city    = sanitize_text_field( wp_unslash( $_POST['ship_city'] ?? '' ) );
+                $ship_state   = sanitize_text_field( wp_unslash( $_POST['ship_state'] ?? '' ) );
+                $ship_postal  = sanitize_text_field( wp_unslash( $_POST['ship_postal'] ?? '' ) );
+                $ship_country = sanitize_text_field( wp_unslash( $_POST['ship_country'] ?? '' ) );
                 $pi_id    = sanitize_text_field( wp_unslash( $_POST['payment_intent_id'] ?? '' ) );
                 if ( empty( $pi_id ) ) {
                     wp_send_json_error( 'Missing payment intent.' );
@@ -818,6 +972,7 @@ add_action('plugins_loaded', function () {
                 $uid = $this->get_user_uid();
                 global $wpdb;
                 $cart_table  = $wpdb->prefix . 'flw_shopping_cart';
+                $orders_table= $wpdb->prefix . 'flw_orders';
                 $order_table = $wpdb->prefix . 'flw_order_history';
                 $items       = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $cart_table WHERE uid = %s", $uid ) );
                 if ( ! $items ) {
@@ -833,6 +988,30 @@ add_action('plugins_loaded', function () {
                     }
                 }
                 $order_id = isset( $pi['metadata']['order_id'] ) ? $pi['metadata']['order_id'] : ( 'ORDER-' . time() );
+                // Determine pickup details if any
+                $pickup_type = isset( $_POST['pickup_type'] ) ? sanitize_text_field( wp_unslash( $_POST['pickup_type'] ) ) : '';
+                $pickup_date = isset( $_POST['pickup_date'] ) ? sanitize_text_field( wp_unslash( $_POST['pickup_date'] ) ) : '';
+                $pickup_time = isset( $_POST['pickup_time'] ) ? sanitize_text_field( wp_unslash( $_POST['pickup_time'] ) ) : '';
+                // Persist order master
+                $wpdb->insert( $orders_table, [
+                    'uid'             => $uid,
+                    'order_id'        => $order_id,
+                    'customer_name'   => $name,
+                    'email'           => $email,
+                    'phone'           => $phone,
+                    'delivery_method' => $delivery_method,
+                    'pickup_type'     => $delivery_method === 'pickup' ? $pickup_type : '',
+                    'pickup_date'     => $delivery_method === 'pickup' ? $pickup_date : '',
+                    'pickup_time'     => $delivery_method === 'pickup' ? $pickup_time : '',
+                    'ship_name'       => $delivery_method === 'shipping' ? $ship_name : '',
+                    'ship_address1'   => $delivery_method === 'shipping' ? $ship_address1 : '',
+                    'ship_address2'   => $delivery_method === 'shipping' ? $ship_address2 : '',
+                    'ship_city'       => $delivery_method === 'shipping' ? $ship_city : '',
+                    'ship_state'      => $delivery_method === 'shipping' ? $ship_state : '',
+                    'ship_postal'     => $delivery_method === 'shipping' ? $ship_postal : '',
+                    'ship_country'    => $delivery_method === 'shipping' ? $ship_country : '',
+                    'created_at'      => current_time( 'mysql' ),
+                ] );
                 // Send admin email
                 $admin_email = get_option( 'ssc_order_admin_email' );
                 if ( ! $admin_email ) {
@@ -844,11 +1023,15 @@ add_action('plugins_loaded', function () {
                 $message .= "Name: " . $name . "\n";
                 if ( ! empty( $email ) ) { $message .= "Email: " . $email . "\n"; }
                 if ( ! empty( $phone ) ) { $message .= "Phone: " . $phone . "\n"; }
-                // If cart contains gift cards, note delivery method
-                $has_gift_card = false;
-                foreach ( $items as $it ) { if ( $this->is_gift_card_product( $it->product_name ) ) { $has_gift_card = true; break; } }
-                if ( $has_gift_card ) {
-                    $message .= "\nGift Card Delivery: In-store pickup\n";
+                $message .= "\nFulfillment:\n";
+                if ( $delivery_method === 'pickup' ) {
+                    $message .= "Pickup Type: " . $pickup_type . "\n";
+                    $message .= "Pickup When: " . $pickup_date . ' ' . $pickup_time . "\n";
+                } else {
+                    $message .= "Shipping To: " . $ship_name . "\n";
+                    $message .= $ship_address1 . ( $ship_address2 ? "\n" . $ship_address2 : '' ) . "\n";
+                    $message .= $ship_city . ", " . $ship_state . ' ' . $ship_postal . "\n";
+                    $message .= $ship_country . "\n";
                 }
                 $message .= "\nOrder Details:\n";
                 foreach ( $items as $item ) {
@@ -927,9 +1110,30 @@ add_action('plugins_loaded', function () {
 				$order_id = sanitize_text_field( wp_unslash( $_GET['order_id'] ) );
 				global $wpdb;
 				$order_table = $wpdb->prefix . 'flw_order_history';
+				$orders_master = $wpdb->prefix . 'flw_orders';
+				$order_master = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $orders_master WHERE order_id = %s", $order_id ) );
 				$items = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $order_table WHERE order_id = %s", $order_id ) );
 				
 				echo '<div class="wrap"><h1>Order Details: ' . esc_html( $order_id ) . '</h1>';
+				if ( $order_master ) {
+					echo '<h2>Customer</h2>';
+					echo '<p><strong>Name:</strong> ' . esc_html( $order_master->customer_name ) . '<br>';
+					if ( ! empty( $order_master->email ) ) { echo '<strong>Email:</strong> ' . esc_html( $order_master->email ) . '<br>'; }
+					if ( ! empty( $order_master->phone ) ) { echo '<strong>Phone:</strong> ' . esc_html( $order_master->phone ) . '<br>'; }
+					echo '</p>';
+
+					echo '<h2>Fulfillment</h2>';
+					if ( $order_master->delivery_method === 'pickup' ) {
+						echo '<p><strong>Pickup Type:</strong> ' . esc_html( $order_master->pickup_type ) . '<br>';
+						echo '<strong>Pickup When:</strong> ' . esc_html( trim( $order_master->pickup_date . ' ' . $order_master->pickup_time ) ) . '</p>';
+					} else {
+						echo '<p><strong>Ship To:</strong><br>' . esc_html( $order_master->ship_name ) . '<br>';
+						echo esc_html( $order_master->ship_address1 );
+						if ( ! empty( $order_master->ship_address2 ) ) { echo '<br>' . esc_html( $order_master->ship_address2 ); }
+						echo '<br>' . esc_html( $order_master->ship_city . ', ' . $order_master->ship_state . ' ' . $order_master->ship_postal );
+						echo '<br>' . esc_html( $order_master->ship_country ) . '</p>';
+					}
+				}
 				if ( $items ) {
 					echo '<table class="wp-list-table widefat fixed striped">';
 					echo '<thead><tr>';
@@ -1140,6 +1344,10 @@ add_action('plugins_loaded', function () {
                     update_option( 'ssc_gift_cards_enabled', isset( $_POST['ssc_enable_gift_cards'] ) ? 1 : 0 );
                     update_option( 'ssc_gift_cards', $gift_cards_clean );
 
+                    // Remove data on deactivation flag
+                    $remove_on_deactivation = isset( $_POST['ssc_remove_on_deactivation'] ) ? 1 : 0;
+                    update_option( 'ssc_remove_on_deactivation', $remove_on_deactivation );
+
                     echo '<div class="updated"><p>Settings saved.</p></div>';
                     }
                 }
@@ -1151,6 +1359,7 @@ add_action('plugins_loaded', function () {
                 $global_orders_disabled = get_option( 'ssc_global_orders_disabled', 0 );
                 $gift_cards_enabled = get_option( 'ssc_gift_cards_enabled', 0 );
                 $gift_cards = get_option( 'ssc_gift_cards', [] );
+                $remove_on_deactivation = get_option( 'ssc_remove_on_deactivation', 0 );
                 
                 // Retrieve pickup types from the database.
                 $pickup_table = $wpdb->prefix . 'flw_pickup_types';
@@ -1226,6 +1435,12 @@ add_action('plugins_loaded', function () {
                             <label>
                                 <input type="checkbox" name="ssc_global_orders_disabled" value="1" <?php checked( $global_orders_disabled, 1 ); ?>>
                                 Disable Online Orders
+                            </label>
+                        </p>
+                        <p>
+                            <label>
+                                <input type="checkbox" name="ssc_remove_on_deactivation" value="1" <?php checked( $remove_on_deactivation, 1 ); ?>>
+                                Remove all plugin data from the database on plugin deactivation (irreversible)
                             </label>
                         </p>
                         <hr>
