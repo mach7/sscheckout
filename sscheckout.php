@@ -357,10 +357,16 @@ add_action('plugins_loaded', function () {
                         continue;
                     }
                     $name = 'Gift Card $' . number_format( $price, 2 );
+                    $remaining = $this->get_gift_card_available( $name );
                     echo '<div class="ssc-gift-card">';
                     echo '<div class="ssc-product-title">' . esc_html( $name ) . '</div>';
-                    // Render the add_to_cart block for this gift card
-                    echo $this->add_to_cart_shortcode( [ 'name' => $name, 'price' => (string) $price ] );
+                    echo '<div class="ssc-availability">Remaining: ' . esc_html( $remaining ) . '</div>';
+                    // Render the add_to_cart block for this gift card or show sold out
+                    if ( intval( $remaining ) > 0 ) {
+                        echo $this->add_to_cart_shortcode( [ 'name' => $name, 'price' => (string) $price ] );
+                    } else {
+                        echo '<div class="ssc-sold-out">Sold out</div>';
+                    }
                     echo '</div>';
                 }
                 echo '</div>';
@@ -1239,6 +1245,7 @@ add_action('plugins_loaded', function () {
                                         <th>Enabled</th>
                                         <th>Denomination (Price)</th>
                                         <th>Total Stock</th>
+                                        <th>Remaining</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
@@ -1248,11 +1255,14 @@ add_action('plugins_loaded', function () {
                                             $gc_price = isset( $gc['price'] ) ? floatval( $gc['price'] ) : 0;
                                             $gc_stock = isset( $gc['stock'] ) ? intval( $gc['stock'] ) : 0;
                                             $gc_enabled = ! empty( $gc['enabled'] );
+                                            $gc_name = 'Gift Card $' . number_format( $gc_price, 2 );
+                                            $gc_remaining = $this->get_gift_card_available( $gc_name );
                                         ?>
                                         <tr>
                                             <td><input type="checkbox" name="gift_cards[<?php echo intval( $idx ); ?>][enabled]" <?php checked( $gc_enabled, true ); ?>></td>
                                             <td><input type="number" step="0.01" min="0" name="gift_cards[<?php echo intval( $idx ); ?>][price]" value="<?php echo esc_attr( $gc_price ); ?>" required></td>
                                             <td><input type="number" min="0" name="gift_cards[<?php echo intval( $idx ); ?>][stock]" value="<?php echo esc_attr( $gc_stock ); ?>" required></td>
+                                            <td><?php echo esc_html( $gc_remaining ); ?></td>
                                             <td><button type="button" class="button remove-gift-card">Remove</button></td>
                                         </tr>
                                         <?php endforeach; ?>
@@ -1261,6 +1271,7 @@ add_action('plugins_loaded', function () {
                                             <td><input type="checkbox" name="gift_cards[0][enabled]" checked></td>
                                             <td><input type="number" step="0.01" min="0" name="gift_cards[0][price]" value="25" required></td>
                                             <td><input type="number" min="0" name="gift_cards[0][stock]" value="10" required></td>
+                                            <td>N/A</td>
                                             <td><button type="button" class="button remove-gift-card">Remove</button></td>
                                         </tr>
                                     <?php endif; ?>
