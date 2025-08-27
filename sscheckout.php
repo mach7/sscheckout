@@ -2,10 +2,11 @@
 /*
 Plugin Name: Simple Shopping Cart
 Description: A simple shopping cart plugin with Stripe checkout integration.
-Version: 1.3.0
-Author: Tyson Brooks
+Version: 1.3.2
+Author: FrostLine Works
 Author URI: https://frostlineworks.com
 Tested up to: 6.2
+Requires Plugins: flwsecureupdates
 */
 // Prevent direct access to this file.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -33,44 +34,7 @@ function enqueue_datepicker_assets() {
 add_action( 'wp_enqueue_scripts', 'enqueue_datepicker_assets' );
 // Ensure the FLW Plugin Library is loaded before running the plugin.
 add_action('plugins_loaded', function () {
-	// Check if the FLW Plugin Update Checker class exists.
-	if ( class_exists( 'FLW_Plugin_Update_Checker' ) ) {
-		$pluginSlug = basename( dirname( __FILE__ ) );
-		FLW_Plugin_Update_Checker::initialize( __FILE__, $pluginSlug );
-		add_filter('site_transient_update_plugins', function ($transient) {
-			if ( isset( $transient->response ) ) {
-				foreach ( $transient->response as $plugin_slug => $plugin_data ) {
-					if ( $plugin_slug === plugin_basename( __FILE__ ) ) {
-						$icon_url = plugins_url( 'assets/logo-128x128.png', __FILE__ );
-						$transient->response[$plugin_slug]->icons = [
-							'default' => $icon_url,
-							'1x'      => $icon_url,
-							'2x'      => plugins_url( 'assets/logo-256x256.png', __FILE__ ),
-						];
-					}
-				}
-			}
-			return $transient;
-		});
-	} else {
-		add_action('admin_notices', function () {
-			if ( ! function_exists( 'get_plugins' ) ) {
-				require_once ABSPATH . 'wp-admin/includes/plugin.php';
-			}
-			$pluginSlug = 'flwpluginlibrary/flwpluginlibrary.php';
-			$plugins    = get_plugins();
-			if ( ! isset( $plugins[ $pluginSlug ] ) ) {
-				echo '<div class="notice notice-error"><p>The FLW Plugin Library is not installed. Please install and activate it to enable update functionality.</p></div>';
-			} elseif ( ! is_plugin_active( $pluginSlug ) ) {
-				$activateUrl = wp_nonce_url(
-					admin_url( 'plugins.php?action=activate&plugin=' . $pluginSlug ),
-					'activate-plugin_' . $pluginSlug
-				);
-				echo '<div class="notice notice-error"><p>The FLW Plugin Library is installed but not active. Please <a href="' . esc_url( $activateUrl ) . '">activate</a> it to enable update functionality.</p></div>';
-			}
-		});
-	}
-	if ( class_exists( 'FLW_Plugin_Library' ) ) {
+	
 		class SimpleShoppingCart_Plugin {
 			/**
 			 * Constructor – sets up activation, shortcodes, AJAX handlers, scripts, and admin menu.
@@ -1761,11 +1725,6 @@ add_action('plugins_loaded', function () {
             
 		}
 		new SimpleShoppingCart_Plugin();
-	} else {
-		add_action( 'admin_notices', function () {
-			echo '<div class="notice notice-error"><p>The FLW Plugin Library must be activated for Simple Shopping Cart to work.</p></div>';
-		});
-	}
 });
 
 // Process form submission for pickup types.
